@@ -1,0 +1,2 @@
+0000000000000000000000000000000000000000 a7c06d3efe70440bf306b5ef8eaf812db95a0293 fina-123 <fina@example.com> 1778744708 +0700	commit (initial): Initial commit: Aplikasi Manajemen Organisasi IPNU IPPNU Ranting Batursari
+a7c06d3efe70440bf306b5ef8eaf812db95a0293 2ec3809a80dadbaef2d9330bb8c442922482cff1 fina-123 <fina@example.com> 1778750744 +0700	commit: fix: perbaiki login admin via Supabase + RLS policy + fallback role
