@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { DashboardSidebar } from '../../components/DashboardSidebar';
 import { Calendar, Award, Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +17,10 @@ interface Activity {
   status: string;
 }
 
+interface ActivityWithRegistration extends Activity {
+  registration_id: string;
+}
+
 interface Registration {
   id: string;
   user_id: string;
@@ -26,8 +31,9 @@ interface Registration {
 
 export function UserHistory() {
   const { user } = useAuth();
-  const [completedActivities, setCompletedActivities] = useState<Activity[]>([]);
+  const [completedActivities, setCompletedActivities] = useState<ActivityWithRegistration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const fetchHistory = async () => {
     if (!user?.id) return;
@@ -42,14 +48,14 @@ export function UserHistory() {
         const approvedRegs = registrations.filter((r) => r.status === 'approved');
         
         // Get activity details for each approved registration
-        const activities: Activity[] = [];
+        const activities: ActivityWithRegistration[] = [];
         for (const reg of approvedRegs) {
           const actRes = await fetch(`${API_BASE}/api/activities/${reg.activity_id}`);
           if (actRes.ok) {
             const activity: Activity = await actRes.json();
             // Only include completed activities
             if (activity.status === 'completed') {
-              activities.push(activity);
+              activities.push({ ...activity, registration_id: reg.id });
             }
           }
         }
@@ -61,6 +67,48 @@ export function UserHistory() {
       toast.error('Gagal memuat riwayat kegiatan');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadCertificate = async (activity: ActivityWithRegistration) => {
+    if (!user) return;
+
+    setDownloadingId(activity.registration_id);
+    try {
+      const res = await fetch(`${API_BASE}/api/certificates/${activity.registration_id}`, {
+        headers: {
+          'X-User-Id': user.id,
+          'X-User-Email': user.email,
+          'X-User-Name': user.name || ''
+        }
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Gagal mengunduh sertifikat');
+      }
+
+      // Get filename from Content-Disposition header
+      const contentDisposition = res.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `sertifikat-${activity.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.html`;
+
+      // Create blob and download
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Sertifikat berhasil diunduh');
+    } catch (error) {
+      console.error('Failed to download certificate:', error);
+      toast.error(error instanceof Error ? error.message : 'Gagal mengunduh sertifikat');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -156,9 +204,13 @@ export function UserHistory() {
                             <Award size={16} className="text-green-600" />
                             <span className="text-green-700">Sertifikat tersedia</span>
                           </div>
-                          <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2 text-sm">
+                          <button
+                            onClick={() => handleDownloadCertificate(activity)}
+                            disabled={downloadingId === activity.registration_id}
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2 text-sm disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          >
                             <Download size={16} />
-                            Unduh Sertifikat
+                            {downloadingId === activity.registration_id ? 'Mengunduh...' : 'Unduh Sertifikat'}
                           </button>
                         </div>
                       </div>
@@ -174,12 +226,12 @@ export function UserHistory() {
               <p className="text-gray-600 mb-6">
                 Anda belum menyelesaikan kegiatan apapun. Daftar dan ikuti kegiatan untuk membangun riwayat Anda!
               </p>
-              <a
-                href="/user/activities"
-                className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              <Link
+                to="/user/activities"
+                className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 no-underline"
               >
                 Lihat Kegiatan
-              </a>
+              </Link>
             </div>
           )}
         </div>

@@ -4,7 +4,7 @@ import { PublicNavbar } from '../components/PublicNavbar';
 import { Footer } from '../components/Footer';
 import { ArrowRight, Users, Calendar, Newspaper, Award, Sparkles, Target, Heart } from 'lucide-react';
 import { mockActivities } from '../data/mockData';
-import { Button } from '../components/ui/Button';
+import { Button } import ... from "@/app/components/ui/button"
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { LogoIPNU } from '../components/LogoIPNU';

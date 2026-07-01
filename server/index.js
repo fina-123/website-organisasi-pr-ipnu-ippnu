@@ -3,16 +3,49 @@ import cors from 'cors';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool from './db.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors({
   origin: 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-User-Email', 'X-User-Name'],
   credentials: true
 }));
 app.use(express.json());
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ─── Multer Configuration ───────────────────────────────────────────
+
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'uploads', 'profile-photos'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Format file tidak didukung. Hanya JPG, JPEG, dan PNG yang diizinkan.'), false);
+  }
+};
+
+const upload = multer({ storage, fileFilter, limits: { fileSize: MAX_FILE_SIZE } });
 
 // ─── Member Registrations ───────────────────────────────────────────
 
@@ -217,7 +250,7 @@ app.get('/api/user/profile', async (req, res) => {
 
     console.log('Querying database for userId:', userId);
     const [users] = await pool.query(
-      'SELECT id, full_name, email, phone, organization, role, created_at FROM created_accounts WHERE id = ?',
+      'SELECT id, full_name, email, phone, foto_url, organization, role, created_at FROM created_accounts WHERE id = ?',
       [userId]
     );
 
@@ -279,7 +312,7 @@ app.put('/api/user/profile', async (req, res) => {
     );
 
     const [updated] = await pool.query(
-      'SELECT id, full_name, email, phone, organization, role, created_at FROM created_accounts WHERE id = ?',
+      'SELECT id, full_name, email, phone, foto_url, organization, role, created_at FROM created_accounts WHERE id = ?',
       [userId]
     );
 
@@ -287,6 +320,85 @@ app.put('/api/user/profile', async (req, res) => {
   } catch (error) {
     console.error('Failed to update user profile:', error);
     res.status(500).json({ error: 'Gagal memperbarui profil.' });
+  }
+});
+
+// POST /api/user/profile/photo - Upload profile photo
+app.post('/api/user/profile/photo', (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Ukuran file maksimal 2MB.' });
+      }
+      return res.status(400).json({ error: 'Gagal mengunggah file.' });
+    }
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID diperlukan.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Tidak ada file yang diunggah.' });
+    }
+
+    const [existing] = await pool.query('SELECT id FROM created_accounts WHERE id = ?', [userId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'User tidak ditemukan.' });
+    }
+
+    const fotoUrl = `/uploads/profile-photos/${req.file.filename}`;
+
+    await pool.execute('UPDATE created_accounts SET foto_url = ? WHERE id = ?', [fotoUrl, userId]);
+
+    const [updated] = await pool.query(
+      'SELECT id, full_name, email, phone, foto_url, organization, role, created_at FROM created_accounts WHERE id = ?',
+      [userId]
+    );
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error('Failed to upload profile photo:', error);
+    res.status(500).json({ error: 'Gagal mengunggah foto profil.' });
+  }
+});
+
+// ─── Members List (Daftar Anggota) ─────────────────────────────────
+
+// GET /api/members - Ambil daftar semua anggota terdaftar
+app.get('/api/members', async (req, res) => {
+  try {
+    const { search, organisasi } = req.query;
+    let query = `
+      SELECT ca.id, ca.full_name, ca.email, ca.phone, ca.foto_url, ca.organization, ca.created_at, mr.address
+      FROM created_accounts ca
+      LEFT JOIN member_registrations mr ON ca.registration_id = mr.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (search) {
+      query += ' AND ca.full_name LIKE ?';
+      params.push(`%${search}%`);
+    }
+    if (organisasi && ['IPNU', 'IPPNU'].includes(organisasi)) {
+      query += ' AND ca.organization = ?';
+      params.push(organisasi);
+    }
+
+    query += ' ORDER BY ca.full_name ASC';
+    const [rows] = await pool.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Failed to load members:', error);
+    res.status(500).json({ error: 'Gagal memuat data anggota.' });
   }
 });
 
@@ -542,8 +654,8 @@ app.post('/api/activities/:id/register', async (req, res) => {
 
     // Cek status kegiatan
     const autoStatus = computeActivityStatus(activity.date);
-    if (autoStatus !== 'upcoming') {
-      return res.status(400).json({ error: 'Pendaftaran hanya tersedia untuk kegiatan yang akan datang.' });
+    if (autoStatus !== 'upcoming' && autoStatus !== 'ongoing') {
+      return res.status(400).json({ error: 'Pendaftaran hanya tersedia untuk kegiatan yang akan datang atau sedang berlangsung.' });
     }
 
     // Cek kuota
@@ -710,6 +822,261 @@ app.get('/api/my-registrations', async (req, res) => {
   }
 });
 
+// GET /api/certificates/:registrationId - Download sertifikat kegiatan
+app.get('/api/certificates/:registrationId', async (req, res) => {
+  try {
+    const { registrationId } = req.params;
+    const userId = req.headers['x-user-id'];
+    const userEmail = req.headers['x-user-email'];
+    const userName = req.headers['x-user-name'];
+
+    // Validasi header
+    if (!userId || !userEmail) {
+      return res.status(401).json({ error: 'Akses ditolak. Silakan login kembali.' });
+    }
+
+    // Ambil data pendaftaran
+    const [registrations] = await pool.query(
+      `SELECT ar.*, a.title, a.type, a.date, a.location
+       FROM activity_registrations ar
+       JOIN activities a ON ar.activity_id = a.id
+       WHERE ar.id = ? AND ar.user_id = ? AND ar.status = 'approved'`,
+      [registrationId, userId]
+    );
+
+    if (registrations.length === 0) {
+      return res.status(404).json({ error: 'Pendaftaran tidak ditemukan atau belum disetujui.' });
+    }
+
+    const registration = registrations[0];
+
+    // Buat sertifikat dalam format HTML yang bisa di-print
+    const certificateHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Sertifikat - ${registration.title}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Georgia', serif;
+    }
+    .certificate {
+      width: 100%;
+      height: 297mm;
+      padding: 20mm;
+      box-sizing: border-box;
+      text-align: center;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      position: relative;
+    }
+    .border {
+      position: absolute;
+      top: 15mm;
+      left: 15mm;
+      right: 15mm;
+      bottom: 15mm;
+      border: 3px solid #1a5f1a;
+      padding: 15mm;
+    }
+    .inner-border {
+      position: absolute;
+      top: 18mm;
+      left: 18mm;
+      right: 18mm;
+      bottom: 18mm;
+      border: 1px solid #1a5f1a;
+    }
+    .header {
+      margin-top: 20mm;
+      margin-bottom: 10mm;
+    }
+    .logo {
+      font-size: 24pt;
+      font-weight: bold;
+      color: #1a5f1a;
+      margin-bottom: 5mm;
+    }
+    .subtitle {
+      font-size: 14pt;
+      color: #333;
+    }
+    .title {
+      font-size: 32pt;
+      font-weight: bold;
+      color: #1a5f1a;
+      margin: 15mm 0;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .presented-to {
+      font-size: 14pt;
+      color: #555;
+      margin-bottom: 5mm;
+    }
+    .recipient-name {
+      font-size: 28pt;
+      font-weight: bold;
+      color: #000;
+      margin: 5mm 0;
+      border-bottom: 2px solid #1a5f1a;
+      display: inline-block;
+      padding: 0 20mm;
+      min-width: 80mm;
+    }
+    .achievement-text {
+      font-size: 14pt;
+      color: #555;
+      margin: 10mm 0;
+      line-height: 1.6;
+    }
+    .activity-name {
+      font-size: 20pt;
+      font-weight: bold;
+      color: #1a5f1a;
+      margin: 5mm 0;
+    }
+    .activity-date {
+      font-size: 14pt;
+      color: #555;
+      margin-bottom: 20mm;
+    }
+    .footer {
+      position: absolute;
+      bottom: 25mm;
+      left: 20mm;
+      right: 20mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .signature {
+      text-align: center;
+    }
+    .signature-line {
+      width: 60mm;
+      border-top: 1px solid #000;
+      margin-bottom: 3mm;
+      padding-top: 3mm;
+    }
+    .signature-name {
+      font-size: 12pt;
+      font-weight: bold;
+      color: #000;
+    }
+    .signature-title {
+      font-size: 10pt;
+      color: #555;
+    }
+    .stamp {
+      width: 40mm;
+      height: 40mm;
+      border: 3px solid #1a5f1a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10pt;
+      font-weight: bold;
+      color: #1a5f1a;
+      transform: rotate(-15deg);
+      opacity: 0.7;
+    }
+    .certificate-id {
+      position: absolute;
+      bottom: 5mm;
+      left: 20mm;
+      font-size: 9pt;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <div class="certificate">
+    <div class="border"></div>
+    <div class="inner-border"></div>
+    
+    <div class="header">
+      <div class="logo">IPNU IPPNU Ranting Batursari</div>
+      <div class="subtitle">Organisasi Pelajar Islam</div>
+    </div>
+
+    <div class="title">Sertifikat Keikutsertaan</div>
+
+    <div class="presented-to">Diberikan kepada:</div>
+    <div class="recipient-name">${userName || userEmail}</div>
+
+    <div class="achievement-text">
+      Telah berpartisipasi dan menyelesaikan kegiatan dengan baik
+    </div>
+
+    <div class="activity-name">${registration.title}</div>
+    <div class="activity-date">
+      Tanggal: ${new Date(registration.date).toLocaleDateString('id-ID', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      })}
+    </div>
+
+    <div class="footer">
+      <div class="signature">
+        <div class="signature-line"></div>
+        <div class="signature-name">Ketua Pelaksana</div>
+        <div class="signature-title">IPNU IPPNU Ranting Batursari</div>
+      </div>
+      
+      <div class="stamp">
+        DISETUJUI
+      </div>
+
+      <div class="signature">
+        <div class="signature-line"></div>
+        <div class="signature-name">Pembina</div>
+        <div class="signature-title">IPNU IPPNU Ranting Batursari</div>
+      </div>
+    </div>
+
+    <div class="certificate-id">
+      ID: ${registrationId}
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    // Set header untuk download sebagai HTML (bisa di-print ke PDF dari browser)
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename="sertifikat-${registration.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.html"`);
+    
+    // Tambahkan instruksi untuk konversi ke PDF
+    const certificateWithInstructions = certificateHTML.replace(
+      '</body>',
+      `
+      <div style="position: fixed; bottom: 20px; left: 20px; right: 20px; background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; font-family: Arial, sans-serif; font-size: 12px; color: #856404; z-index: 1000;">
+        <strong>📋 Cara mendapatkan versi PDF:</strong><br>
+        1. Tekan <kbd>Ctrl + P</kbd> (Windows) atau <kbd>Cmd + P</kbd> (Mac)<br>
+        2. Pilih "Simpan sebagai PDF" sebagai printer<br>
+        3. Klik "Simpan" dan pilih lokasi penyimpanan<br>
+        <em>Catatan: Untuk hasil terbaik, gunakan pengaturan kertas A4 dan margin minimal.</em>
+      </div>
+      </body>
+      `
+    );
+    
+    res.send(certificateWithInstructions);
+  } catch (error) {
+    console.error('Failed to generate certificate:', error);
+    res.status(500).json({ error: 'Gagal membuat sertifikat.' });
+  }
+});
+
 // GET /api/activity-registrations - List semua pendaftaran (admin)
 app.get('/api/activity-registrations', async (req, res) => {
   try {
@@ -800,8 +1167,10 @@ app.get('/api/activity-registrations/stats', async (req, res) => {
 app.get('/api/users/by-email', async (req, res) => {
   try {
     const { email } = req.query;
+    console.log('🔍 [SERVER] /api/users/by-email called with email:', email);
 
     if (!email || typeof email !== 'string') {
+      console.log('❌ [SERVER] Email parameter missing or invalid');
       return res.status(400).json({ error: 'Email diperlukan.' });
     }
 
@@ -810,13 +1179,18 @@ app.get('/api/users/by-email', async (req, res) => {
       [email]
     );
 
+    console.log('📊 [SERVER] Database query result:', users);
+    console.log('📊 [SERVER] Number of users found:', users.length);
+
     if (users.length === 0) {
+      console.log('❌ [SERVER] User not found in database');
       return res.status(404).json({ error: 'User tidak ditemukan.' });
     }
 
+    console.log('✅ [SERVER] Returning user data:', users[0]);
     res.json(users[0]);
   } catch (error) {
-    console.error('Failed to get user by email:', error);
+    console.error('❌ [SERVER] Failed to get user by email:', error);
     res.status(500).json({ error: 'Gagal memuat data user.' });
   }
 });
@@ -1274,10 +1648,11 @@ app.get('/api/my-suggestions', async (req, res) => {
     }
 
     const [suggestions] = await pool.query(
-      'SELECT id, nama, email, subjek, pesan, status, created_at FROM suggestions WHERE email = ? ORDER BY created_at DESC',
+      'SELECT id, nama, email, subjek, pesan, status, balasan, tanggal_balas, created_at FROM suggestions WHERE email = ? ORDER BY created_at DESC',
       [email]
     );
 
+    console.log('📊 [SERVER] My suggestions API response:', suggestions);
     res.json(suggestions);
   } catch (error) {
     console.error('Failed to load my suggestions:', error);

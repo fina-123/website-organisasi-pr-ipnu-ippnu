@@ -1,6 +1,6 @@
 import { DashboardSidebar } from '../../components/DashboardSidebar';
-import { UserCircle, Mail, Phone, MapPin, Calendar, Save, Camera } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { UserCircle, Mail, Phone, Calendar, Save, Camera, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 
@@ -11,6 +11,7 @@ interface UserProfile {
   full_name: string;
   email: string;
   phone: string;
+  foto_url?: string;
   organization: string;
   role: string;
   created_at: string;
@@ -18,6 +19,7 @@ interface UserProfile {
 
 export function UserProfile() {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -25,19 +27,17 @@ export function UserProfile() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const fetchProfile = async () => {
     if (!user?.id) return;
 
     try {
       setLoading(true);
-      console.log('Fetching profile for userId:', user.id);
       const res = await fetch(`${API_BASE}/api/user/profile?userId=${user.id}`);
-      console.log('Profile API response status:', res.status);
-      
+
       if (res.ok) {
         const data = await res.json();
-        console.log('Profile data received:', data);
         setProfile(data);
         setFormData({
           full_name: data.full_name || '',
@@ -46,6 +46,7 @@ export function UserProfile() {
       } else {
         const errorData = await res.json();
         console.error('Profile API error:', errorData);
+        toast.error('Gagal memuat data profil');
       }
     } catch (error) {
       console.error('Failed to fetch profile:', error);
@@ -91,6 +92,56 @@ export function UserProfile() {
     }
   };
 
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Format file tidak didukung. Hanya JPG, JPEG, dan PNG yang diizinkan.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Ukuran file maksimal 2MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      formData.append('userId', user.id);
+
+      const res = await fetch(`${API_BASE}/api/user/profile/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Gagal mengunggah foto');
+      }
+
+      const updated = await res.json();
+      setProfile(updated);
+      toast.success('Foto profil berhasil diperbarui!');
+    } catch (error) {
+      console.error('Failed to upload photo:', error);
+      toast.error(error instanceof Error ? error.message : 'Gagal mengunggah foto profil');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const photoUrl = profile?.foto_url
+    ? `${API_BASE}${profile.foto_url}`
+    : null;
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardSidebar role="user" />
@@ -111,18 +162,43 @@ export function UserProfile() {
               </div>
             ) : (
               <div className="flex items-center gap-6 mb-8">
-                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
-                  <UserCircle size={64} className="text-green-600" />
+                <div className="relative w-24 h-24">
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt="Foto Profil"
+                      className="w-24 h-24 rounded-full object-cover border-2 border-green-200"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
+                      <UserCircle size={64} className="text-green-600" />
+                    </div>
+                  )}
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                      <Loader2 size={28} className="text-white animate-spin" />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-1">{profile?.full_name || 'Anggota'}</h2>
                   <p className="text-gray-600">Anggota {profile?.organization || 'IPNU'}</p>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+
                   <button
-                    onClick={() => toast.info('Fitur unggah foto akan tersedia segera.')}
-                    className="mt-2 text-sm text-green-700 hover:text-green-800 flex items-center gap-1"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="mt-2 text-sm text-green-700 hover:text-green-800 disabled:text-gray-400 flex items-center gap-1"
                   >
                     <Camera size={16} />
-                    Ubah Foto Profil
+                    {uploading ? 'Mengunggah...' : 'Ubah Foto Profil'}
                   </button>
                 </div>
               </div>

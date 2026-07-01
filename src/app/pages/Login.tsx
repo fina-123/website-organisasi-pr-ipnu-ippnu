@@ -7,6 +7,28 @@ import { supabase, isSupabaseConfigured, checkSupabaseConnection } from '../../l
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
+async function fetchUserIdFromApi(email: string): Promise<string | null> {
+  try {
+    console.log('🔍 Fetching user ID from /api/users/by-email for:', email);
+    const userRes = await fetch(`${API_BASE}/api/users/by-email?email=${encodeURIComponent(email)}`);
+    console.log('📡 Response status:', userRes.status, userRes.statusText);
+
+    if (userRes.ok) {
+      const userData = await userRes.json();
+      console.log('✅ User data from API:', userData);
+      console.log('🆔 Using database userId:', userData.id);
+      return userData.id;
+    } else {
+      const errorText = await userRes.text();
+      console.error('❌ /api/users/by-email responded with', userRes.status, ':', errorText);
+      return null;
+    }
+  } catch (err) {
+    console.error('❌ Network error fetching /api/users/by-email:', err);
+    return null;
+  }
+}
+
 export function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -51,12 +73,16 @@ export function Login() {
             console.error('Query member error:', memberError);
             const email = 'admin@ipnuippnu-batursari.org';
             if (data.user.email === email) {
-              login(data.user.email!, 'admin', 'Admin IPNU');
+              const dbUserId = await fetchUserIdFromApi(data.user.email!);
+              console.log('📝 Final userId to be stored:', dbUserId);
+              login(data.user.email!, 'admin', 'Admin IPNU', dbUserId ?? undefined);
               navigate('/admin/dashboard');
               return;
             }
             const role = 'user';
-            login(data.user.email!, role, data.user.email?.split('@')[0]);
+            const dbUserId = await fetchUserIdFromApi(data.user.email!);
+            console.log('📝 Final userId to be stored:', dbUserId);
+            login(data.user.email!, role, data.user.email?.split('@')[0], dbUserId ?? undefined);
             navigate('/user/dashboard');
             return;
           }
@@ -66,15 +92,24 @@ export function Login() {
           // Fetch user ID from created_accounts table
           let userId = data.user.id;
           try {
+            console.log('🔍 Fetching user ID from /api/users/by-email for:', formData.email);
             const userRes = await fetch(`${API_BASE}/api/users/by-email?email=${encodeURIComponent(formData.email)}`);
+            console.log('📡 Response status:', userRes.status, userRes.statusText);
+            
             if (userRes.ok) {
               const userData = await userRes.json();
+              console.log('✅ User data from API:', userData);
+              console.log('🆔 Using database userId:', userData.id);
               userId = userData.id;
+            } else {
+              const errorText = await userRes.text();
+              console.error('❌ Failed to fetch user ID. Status:', userRes.status, 'Response:', errorText);
             }
           } catch (err) {
-            console.error('Failed to fetch user ID:', err);
+            console.error('❌ Exception while fetching user ID:', err);
           }
           
+          console.log('📝 Final userId to be stored:', userId);
           login(data.user.email!, role as 'user' | 'admin', memberData?.full_name, userId);
           navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
         }
@@ -91,24 +126,16 @@ export function Login() {
       
       if (localUser && localUser.password === formData.password) {
         const role = localUser.role || 'user';
-        login(formData.email, role as 'user' | 'admin', localUser.fullName);
+        const dbUserId = await fetchUserIdFromApi(formData.email);
+        console.log('📝 Final userId to be stored:', dbUserId);
+        login(formData.email, role as 'user' | 'admin', localUser.fullName, dbUserId ?? undefined);
         navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
       } else {
         const demoUser = DEMO_USERS[formData.email as keyof typeof DEMO_USERS];
         if (demoUser && demoUser.password === formData.password) {
-          // Fetch user ID from created_accounts table
-          let userId: string | undefined;
-          try {
-            const userRes = await fetch(`${API_BASE}/api/users/by-email?email=${encodeURIComponent(formData.email)}`);
-            if (userRes.ok) {
-              const userData = await userRes.json();
-              userId = userData.id;
-            }
-          } catch (err) {
-            console.error('Failed to fetch user ID:', err);
-          }
-          
-          login(formData.email, demoUser.role, formData.email === 'ahmad.fauzi@example.com' ? 'Ahmad Fauzi' : undefined, userId);
+          const dbUserId = await fetchUserIdFromApi(formData.email);
+          console.log('📝 Final userId to be stored:', dbUserId);
+          login(formData.email, demoUser.role, formData.email === 'ahmad.fauzi@example.com' ? 'Ahmad Fauzi' : undefined, dbUserId ?? undefined);
           navigate(demoUser.role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
         } else {
           setError('Email atau password salah!');

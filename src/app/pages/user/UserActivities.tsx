@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { DashboardSidebar } from '../../components/DashboardSidebar';
 import { Calendar, Users, MapPin, X, Search, Filter, Eye, UserCheck, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
@@ -189,13 +190,13 @@ export function UserActivities() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Kegiatan</h1>
               <p className="text-gray-600">Daftar kegiatan IPNU IPPNU Batursari</p>
             </div>
-            <button
-              onClick={() => setShowHistoryModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            <Link
+              to="/user/registrations"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 no-underline"
             >
               <UserCheck size={20} />
               Riwayat Pendaftaran
-            </button>
+            </Link>
           </div>
 
           {/* Filter */}
@@ -248,7 +249,7 @@ export function UserActivities() {
                 const registered = isRegistered(activity.id);
                 const regStatus = getRegistrationStatus(activity.id);
                 const isFull = activity.registered >= activity.quota;
-                const canRegister = activity.status === 'upcoming' && !isFull && !registered;
+                const canRegister = (activity.status === 'upcoming' || activity.status === 'ongoing') && !isFull && !registered;
 
                 return (
                   <div key={activity.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
@@ -337,16 +338,16 @@ export function UserActivities() {
                           </button>
                         )}
 
-                        {!registered && isFull && activity.status === 'upcoming' && (
+                        {!registered && isFull && (activity.status === 'upcoming' || activity.status === 'ongoing') && (
                           <button
                             disabled
-                            className="flex-1 px-4 py-2 bg-gray-300 text-gray-600 rounded-lg cursor-not-allowed"
+                            className="flex-1 px-4 py-2 bg-red-300 text-red-700 rounded-lg cursor-not-allowed"
                           >
-                            Kuota Penuh
+                            Penuh
                           </button>
                         )}
 
-                        {activity.status !== 'upcoming' && !registered && (
+                        {activity.status === 'completed' && !registered && (
                           <button
                             disabled
                             className="flex-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg cursor-not-allowed"

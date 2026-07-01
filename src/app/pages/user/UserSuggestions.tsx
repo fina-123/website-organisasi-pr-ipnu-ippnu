@@ -13,6 +13,8 @@ interface Suggestion {
   subjek: string;
   pesan: string;
   status: string;
+  balasan?: string;
+  tanggal_balas?: string;
   created_at: string;
 }
 
@@ -204,11 +206,11 @@ export function UserSuggestions() {
                           'bg-green-100 text-green-700'
                         }`}>
                           {suggestion.status === 'baru' ? 'Baru' :
-                           suggestion.status === 'dibaca' ? 'Dibaca' : 'Dibalas'}
+                           suggestion.status === 'dibaca' ? 'Dibaca' : 'Dibalas ✓'}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{suggestion.pesan}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 mb-3">
                         {new Date(suggestion.created_at).toLocaleDateString('id-ID', {
                           day: 'numeric',
                           month: 'long',
@@ -217,6 +219,16 @@ export function UserSuggestions() {
                           minute: '2-digit'
                         })}
                       </p>
+                      
+                      {suggestion.status === 'dibalas' && suggestion.balasan && (
+                        <div style={{background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px', marginTop: '8px'}}>
+                          <p style={{fontWeight: 'bold', color: '#16a34a', marginBottom: '4px'}}>💬 Balasan Admin:</p>
+                          <p style={{color: '#333'}}>{suggestion.balasan}</p>
+                          <p style={{fontSize: '12px', color: '#888', marginTop: '4px'}}>
+                            Dibalas pada: {suggestion.tanggal_balas ? new Date(suggestion.tanggal_balas).toLocaleDateString('id-ID') : '-'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

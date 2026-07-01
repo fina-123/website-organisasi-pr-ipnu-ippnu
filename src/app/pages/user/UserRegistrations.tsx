@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { DashboardSidebar } from '../../components/DashboardSidebar';
 import { ClipboardList, Calendar, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -170,12 +171,12 @@ export function UserRegistrations() {
               <p className="text-gray-600 mb-6">
                 Anda belum mendaftar kegiatan apapun. Lihat kegiatan yang tersedia dan daftar sekarang!
               </p>
-              <a
-                href="/user/activities"
-                className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              <Link
+                to="/user/activities"
+                className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 no-underline"
               >
                 Lihat Kegiatan
-              </a>
+              </Link>
             </div>
           )}
         </div>
