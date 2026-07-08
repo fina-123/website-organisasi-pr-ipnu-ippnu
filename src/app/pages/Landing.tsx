@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicNavbar } from '../components/PublicNavbar';
 import { Footer } from '../components/Footer';
-import { ArrowRight, Users, Calendar, Newspaper, Award, Sparkles, Target, Heart } from 'lucide-react';
+import { Users, Calendar, Newspaper, MessageSquare, Sparkles, Target, Heart } from 'lucide-react';
 import { mockActivities } from '../data/mockData';
-import { Button } import ... from "@/app/components/ui/button"
+import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { LogoIPNU } from '../components/LogoIPNU';
-import { LogoIPPNU } from '../components/LogoIPPNU';
 import { LogoPair } from '../components/LogoPair';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
@@ -26,9 +24,18 @@ interface Article {
   tanggal_publish: string;
 }
 
+interface Stats {
+  anggota: number;
+  kegiatan: number;
+  artikel: number;
+  saran: number;
+}
+
 export function Landing() {
   const [recentNews, setRecentNews] = useState<Article[]>([]);
   const [loadingNews, setLoadingNews] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
   const upcomingActivities = mockActivities.filter((a) => a.status === 'upcoming').slice(0, 3);
 
   useEffect(() => {
@@ -45,7 +52,22 @@ export function Landing() {
       }
     };
 
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/stats`);
+        if (!res.ok) throw new Error('Gagal memuat statistik');
+        const data = await res.json();
+        setStats(data);
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+        setStats({ anggota: 0, kegiatan: 0, artikel: 0, saran: 0 });
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
     fetchRecentNews();
+    fetchStats();
   }, []);
 
   return (
@@ -112,29 +134,37 @@ export function Landing() {
               <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/30">
                 <Users size={32} className="text-white" />
               </div>
-              <div className="text-4xl font-bold text-gray-900 mb-1">150+</div>
-              <div className="text-sm text-gray-600 font-medium">Anggota Aktif</div>
+              <div className="text-4xl font-bold text-gray-900 mb-1">
+                {loadingStats ? '...' : stats?.anggota ?? 0}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">👥 Anggota Terdaftar</div>
             </Card>
             <Card hover className="text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
                 <Calendar size={32} className="text-white" />
               </div>
-              <div className="text-4xl font-bold text-gray-900 mb-1">24+</div>
-              <div className="text-sm text-gray-600 font-medium">Kegiatan/Tahun</div>
+              <div className="text-4xl font-bold text-gray-900 mb-1">
+                {loadingStats ? '...' : stats?.kegiatan ?? 0}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">📅 Kegiatan</div>
             </Card>
             <Card hover className="text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/30">
-                <Award size={32} className="text-white" />
+                <Newspaper size={32} className="text-white" />
               </div>
-              <div className="text-4xl font-bold text-gray-900 mb-1">10+</div>
-              <div className="text-sm text-gray-600 font-medium">Prestasi</div>
+              <div className="text-4xl font-bold text-gray-900 mb-1">
+                {loadingStats ? '...' : stats?.artikel ?? 0}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">📰 Artikel Diterbitkan</div>
             </Card>
             <Card hover className="text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/30">
-                <Newspaper size={32} className="text-white" />
+                <MessageSquare size={32} className="text-white" />
               </div>
-              <div className="text-4xl font-bold text-gray-900 mb-1">50+</div>
-              <div className="text-sm text-gray-600 font-medium">Artikel</div>
+              <div className="text-4xl font-bold text-gray-900 mb-1">
+                {loadingStats ? '...' : stats?.saran ?? 0}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">💬 Saran Masuk</div>
             </Card>
           </div>
         </div>
@@ -221,7 +251,7 @@ export function Landing() {
                   <Calendar size={64} className="text-white relative z-10 group-hover:scale-110 transition-transform" />
                 </div>
                 <CardContent className="p-6">
-                  <Badge variant="success" size="sm" className="mb-3">
+                  <Badge variant="default" className="mb-3">
                     {activity.type}
                   </Badge>
                   <h3 className="font-bold text-gray-900 mb-2 text-lg group-hover:text-green-700 transition-colors">{activity.title}</h3>

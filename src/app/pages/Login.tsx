@@ -233,6 +233,12 @@ export function Login() {
                 Daftar Anggota
               </Link>
             </p>
+            <p className="text-sm text-gray-600 mt-2">
+              Sudah mendaftar tapi belum punya akun?{' '}
+              <Link to="/cek-status" className="text-green-700 hover:text-green-800 font-medium">
+                Cek Status Pendaftaran →
+              </Link>
+            </p>
           </div>
         </div>
       </div>

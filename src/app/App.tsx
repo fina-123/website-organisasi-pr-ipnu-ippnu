@@ -11,6 +11,8 @@ import { Documentation } from './pages/Documentation';
 import { Contact } from './pages/Contact';
 import { Login } from './pages/Login';
 import { MemberRegistration } from './pages/MemberRegistration';
+import { RegistrationSuccess } from './pages/RegistrationSuccess';
+import { CheckRegistrationStatus } from './pages/CheckRegistrationStatus';
 import { ResetPassword } from './pages/ResetPassword';
 import { ForgotPassword } from './pages/ForgotPassword';
 
@@ -56,6 +58,8 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/lupa-password" element={<ForgotPassword />} />
         <Route path="/daftar-anggota" element={<MemberRegistration />} />
+        <Route path="/pendaftaran-berhasil" element={<RegistrationSuccess />} />
+        <Route path="/cek-status" element={<CheckRegistrationStatus />} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute requiredRole="admin" />}>

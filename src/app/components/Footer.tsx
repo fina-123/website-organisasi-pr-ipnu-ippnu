@@ -45,6 +45,11 @@ export function Footer() {
                   Berita & Kegiatan
                 </Link>
               </li>
+              <li>
+                <Link to="/cek-status" className="hover:text-green-400 transition-colors">
+                  Cek Status Pendaftaran
+                </Link>
+              </li>
             </ul>
           </div>
 

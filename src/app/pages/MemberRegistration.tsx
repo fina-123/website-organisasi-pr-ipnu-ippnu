@@ -2,6 +2,7 @@ import { PublicNavbar } from '../components/PublicNavbar';
 import { Footer } from '../components/Footer';
 import { UserPlus, User, Mail, Phone, MapPin, Calendar, FileText, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface FormData {
   fullName: string;
@@ -18,6 +19,7 @@ interface FormData {
 }
 
 export function MemberRegistration() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
     email: '',
@@ -116,9 +118,8 @@ export function MemberRegistration() {
       return;
     }
 
-    alert(
-      `Pendaftaran berhasil dikirim! 🎉\n\nData Anda sudah tersimpan di ${saveSource}.\nAdmin akan menghubungi Anda segera.`
-    );
+    // Navigate to success page with user's name
+    navigate('/pendaftaran-berhasil', { state: { nama: formData.fullName } });
 
     setFormData({
       fullName: '',
@@ -427,6 +428,12 @@ export function MemberRegistration() {
               <li>Setelah disetujui, Anda akan mendapatkan akun untuk login ke dashboard</li>
               <li>Anda dapat mengikuti berbagai kegiatan dan program IPNU/IPPNU</li>
             </ol>
+            <p className="mt-4 text-sm text-green-800">
+              Sudah pernah mendaftar?{' '}
+              <Link to="/cek-status" className="text-green-700 hover:text-green-800 font-medium">
+                Cek status pendaftaran Anda di sini →
+              </Link>
+            </p>
           </div>
         </div>
       </section>

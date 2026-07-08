@@ -102,8 +102,8 @@ app.post('/api/member-registrations', async (req, res) => {
     res.status(500).json({ error: 'Gagal menyimpan data pendaftaran ke database.' });
   }
 });
-
 app.patch('/api/member-registrations/:id/status', async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -112,19 +112,92 @@ app.patch('/api/member-registrations/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'Status tidak valid.' });
     }
 
-    const [result] = await pool.execute(
+    const [result] = await connection.execute(
       'UPDATE member_registrations SET status = ? WHERE id = ?',
       [status, id]
     );
 
     if (result.affectedRows === 0) {
+      connection.release();
       return res.status(404).json({ error: 'Pendaftaran tidak ditemukan.' });
     }
 
+    // Jika disetujui, otomatis buat akun + data anggota
+    if (status === 'approved') {
+      // Ambil data pendaftaran
+      const [regs] = await connection.execute(
+        'SELECT * FROM member_registrations WHERE id = ?',
+        [id]
+      );
+
+      if (regs.length > 0) {
+        const reg = regs[0];
+        const accountId = uuidv4();
+        const defaultPassword = 'ipnuippnu123';
+        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+        // Cek apakah akun sudah ada
+        const [existing] = await connection.execute(
+          'SELECT id FROM created_accounts WHERE registration_id = ?',
+          [id]
+        );
+
+        if (existing.length === 0) {
+          // Buat akun login otomatis
+          await connection.execute(
+            `INSERT INTO created_accounts 
+              (id, registration_id, full_name, email, password_hash, phone, organization, role)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [accountId, reg.id, reg.full_name, reg.email, passwordHash, reg.phone, reg.organization, 'user']
+          );
+        }
+      }
+    }
+
+    connection.release();
     res.json({ success: true });
   } catch (error) {
+    connection.release();
     console.error('Failed to update member registration status:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Email ini sudah memiliki akun.' });
+    }
     res.status(500).json({ error: 'Gagal memperbarui status pendaftaran.' });
+  }
+});
+// GET /api/check-registration - Cek status pendaftaran by email (public)
+app.get('/api/check-registration', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email diperlukan.' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT full_name, organization, submitted_at, status FROM member_registrations WHERE email = ?',
+      [email]
+    );
+
+    console.log('🔍 [CHECK-REGISTRATION] Raw database result for email:', email);
+    console.log('📊 [CHECK-REGISTRATION] Database rows:', rows);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Pendaftaran tidak ditemukan.' });
+    }
+
+    const registration = rows[0];
+    console.log('✅ [CHECK-REGISTRATION] Returning submitted_at:', registration.submitted_at);
+    
+    res.json({
+      full_name: registration.full_name,
+      organization: registration.organization,
+      submitted_at: registration.submitted_at,
+      status: registration.status
+    });
+  } catch (error) {
+    console.error('Failed to check registration:', error);
+    res.status(500).json({ error: 'Gagal memeriksa status pendaftaran.' });
   }
 });
 
@@ -794,6 +867,26 @@ app.get('/api/activities/stats', async (req, res) => {
   } catch (error) {
     console.error('Failed to load activity stats:', error);
     res.status(500).json({ error: 'Gagal memuat statistik kegiatan.' });
+  }
+});
+
+// GET /api/stats - Public statistics (no auth required)
+app.get('/api/stats', async (req, res) => {
+  try {
+    const [[members]] = await pool.query('SELECT COUNT(*) as total FROM created_accounts');
+    const [[activities]] = await pool.query('SELECT COUNT(*) as total FROM activities');
+    const [[articles]] = await pool.query('SELECT COUNT(*) as total FROM articles WHERE status = "published"');
+    const [[suggestions]] = await pool.query('SELECT COUNT(*) as total FROM suggestions');
+
+    res.json({
+      anggota: members.total,
+      kegiatan: activities.total,
+      artikel: articles.total,
+      saran: suggestions.total
+    });
+  } catch (error) {
+    console.error('Failed to load stats:', error);
+    res.status(500).json({ error: 'Gagal memuat statistik.' });
   }
 });
 
