@@ -564,7 +564,10 @@ export function AdminUsers() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-1">Kelola User</h1>
-              <p className="text-gray-500">Manajemen akun user dan admin sistem</p>
+             <p className="text-gray-500">Manajemen akun user dan admin sistem</p>
+<div className="mt-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+  💡 Halaman ini untuk mengelola akun admin dan user yang ditambahkan secara manual. Untuk melihat akun anggota yang mendaftar online, buka menu <strong>Pendaftaran Anggota → Tab "Akun yang Sudah Dibuat"</strong>.
+</div>
             </div>
             <button
               onClick={openAddModal}
