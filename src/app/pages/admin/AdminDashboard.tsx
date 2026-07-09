@@ -37,11 +37,27 @@ export function AdminDashboard() {
   const [pendingRegistrations, setPendingRegistrations] = useState<RegistrationWithDetails[]>([]);
   const [activityStats, setActivityStats] = useState<ActivityStats | null>(null);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [totalMembers, setTotalMembers] = useState<number>(0);
+  const [totalArticles, setTotalArticles] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+
+      // Fetch total members from created accounts
+      const membersRes = await fetch(`${API_BASE}/api/created-accounts`);
+      if (membersRes.ok) {
+        const membersData = await membersRes.json();
+        setTotalMembers(membersData.length);
+      }
+
+      // Fetch total articles
+      const articlesRes = await fetch(`${API_BASE}/api/articles?status=published`);
+      if (articlesRes.ok) {
+        const articlesData = await articlesRes.json();
+        setTotalArticles(articlesData.length);
+      }
 
       // Fetch activity stats
       const statsRes = await fetch(`${API_BASE}/api/activities/stats`);
@@ -125,7 +141,7 @@ export function AdminDashboard() {
   const stats = [
     {
       label: 'Total Anggota',
-      value: mockMembers.length,
+      value: totalMembers,
       icon: Users,
       color: 'bg-green-100 text-green-600',
     },
@@ -143,7 +159,7 @@ export function AdminDashboard() {
     },
     {
       label: 'Total Berita',
-      value: mockNews.length,
+      value: totalArticles,
       icon: Newspaper,
       color: 'bg-purple-100 text-purple-600',
     },

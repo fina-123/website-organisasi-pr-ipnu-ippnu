@@ -20,9 +20,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "http://localhost:4000"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      imgSrc: ["'self'", "data:", "http://localhost:4000", "https:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", "http://localhost:4000"],
     },
   },
   crossOriginEmbedderPolicy: false, // Disable for file uploads
@@ -1790,10 +1792,14 @@ app.get('/api/suggestions/:id', async (req, res) => {
 // POST /api/suggestions - Kirim saran baru (public, no auth)
 app.post('/api/suggestions', async (req, res) => {
   try {
+    console.log('📝 [SUGGESTIONS] Received POST request');
+    console.log('📝 [SUGGESTIONS] Request body:', req.body);
+    
     const { nama, email, telepon, subjek, pesan } = req.body;
 
     // Validasi
     if (!nama || !subjek || !pesan) {
+      console.log('❌ [SUGGESTIONS] Validation failed - missing fields');
       return res.status(400).json({ 
         error: 'Data tidak lengkap.',
         details: 'Field nama, subjek, dan pesan harus diisi'
@@ -1801,9 +1807,11 @@ app.post('/api/suggestions', async (req, res) => {
     }
 
     if (pesan.length < 20) {
+      console.log('❌ [SUGGESTIONS] Validation failed - pesan too short');
       return res.status(400).json({ error: 'Pesan minimal 20 karakter.' });
     }
 
+    console.log('📝 [SUGGESTIONS] Inserting into database...');
     const result = await pool.execute(
       `INSERT INTO suggestions (nama, email, telepon, subjek, pesan, status)
        VALUES (?, ?, ?, ?, ?, 'baru')`,
@@ -1811,11 +1819,19 @@ app.post('/api/suggestions', async (req, res) => {
     );
 
     const insertId = result[0].insertId;
+    console.log('✅ [SUGGESTIONS] Inserted with ID:', insertId);
+    
     const [newSuggestion] = await pool.query('SELECT * FROM suggestions WHERE id = ?', [insertId]);
+    console.log('✅ [SUGGESTIONS] Returning new suggestion:', newSuggestion[0]);
     
     res.status(201).json(newSuggestion[0]);
   } catch (error) {
-    console.error('Failed to create suggestion:', error);
+    console.error('❌ [SUGGESTIONS] Failed to create suggestion:', error);
+    console.error('❌ [SUGGESTIONS] Error details:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage
+    });
     res.status(500).json({ error: 'Gagal mengirim saran.' });
   }
 });
@@ -1920,6 +1936,9 @@ const dokumentasiUpload = multer({
 // GET /api/dokumentasi - Ambil semua dokumentasi (public)
 app.get('/api/dokumentasi', async (req, res) => {
   try {
+    console.log('📸 [DOKUMENTASI] Received GET request');
+    console.log('📸 [DOKUMENTASI] Query params:', req.query);
+    
     const { kategori } = req.query;
     let query = 'SELECT * FROM dokumentasi WHERE 1=1';
     const params = [];
@@ -1930,7 +1949,10 @@ app.get('/api/dokumentasi', async (req, res) => {
     }
 
     query += ' ORDER BY tanggal DESC, created_at DESC';
+    console.log('📸 [DOKUMENTASI] Executing query:', query, 'with params:', params);
+    
     const [rows] = await pool.query(query, params);
+    console.log('📸 [DOKUMENTASI] Found', rows.length, 'items');
 
     // Add base URL to foto_url
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -1939,9 +1961,15 @@ app.get('/api/dokumentasi', async (req, res) => {
       foto_url: item.foto_url ? `${baseUrl}${item.foto_url}` : null,
     }));
 
+    console.log('✅ [DOKUMENTASI] Returning data with full URLs');
     res.json(dokumentasiWithFullUrl);
   } catch (error) {
-    console.error('Failed to load dokumentasi:', error);
+    console.error('❌ [DOKUMENTASI] Failed to load dokumentasi:', error);
+    console.error('❌ [DOKUMENTASI] Error details:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage
+    });
     res.status(500).json({ error: 'Gagal memuat data dokumentasi.' });
   }
 });

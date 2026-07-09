@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Mail, Phone, MapPin, Facebook, Instagram, Twitter } from 'lucide-react';
+import { Mail, Phone, MapPin, Facebook, Instagram } from 'lucide-react';
 import { LogoPair } from './LogoPair';
 
 export function Footer() {
@@ -77,7 +77,7 @@ export function Footer() {
             <h3 className="font-bold text-white mb-4">Media Sosial</h3>
             <div className="flex gap-3">
               <a
-                href="https://facebook.com"
+                href="https://www.facebook.com/profile.php?id=100017794368549"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-green-600 transition-colors"
@@ -85,20 +85,12 @@ export function Footer() {
                 <Facebook size={20} />
               </a>
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/pr_ipnuippnubatursari?igsh=MXN0NDBtcDZ6MHJkYw=="
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-green-600 transition-colors"
               >
                 <Instagram size={20} />
-              </a>
-              <a
-                href="https://twitter.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-green-600 transition-colors"
-              >
-                <Twitter size={20} />
               </a>
             </div>
           </div>
