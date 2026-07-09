@@ -132,3 +132,20 @@ CREATE TABLE IF NOT EXISTS suggestions (
 
 CREATE INDEX idx_suggestions_status ON suggestions (status);
 CREATE INDEX idx_suggestions_created_at ON suggestions (created_at DESC);
+
+-- ─── Dokumentasi (Galeri Foto) ──────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS dokumentasi (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  judul VARCHAR(255) NOT NULL,
+  kategori ENUM('Kegiatan', 'Sosial', 'Organisasi', 'Lainnya') NOT NULL DEFAULT 'Lainnya',
+  foto_url VARCHAR(500) NOT NULL,
+  deskripsi TEXT DEFAULT NULL,
+  tanggal DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_dokumentasi_kategori ON dokumentasi (kategori);
+CREATE INDEX idx_dokumentasi_tanggal ON dokumentasi (tanggal DESC);
+CREATE INDEX idx_dokumentasi_created_at ON dokumentasi (created_at DESC);

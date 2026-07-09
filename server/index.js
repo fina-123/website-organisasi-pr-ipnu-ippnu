@@ -1803,6 +1803,117 @@ app.delete('/api/suggestions/:id', async (req, res) => {
   }
 });
 
+// ─── Dokumentasi (Galeri Foto) ──────────────────────────────────────
+
+// Multer configuration for dokumentasi uploads
+const dokumentasiStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'uploads', 'dokumentasi'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+const dokumentasiUpload = multer({ 
+  storage: dokumentasiStorage, 
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Format file tidak didukung. Hanya JPG, JPEG, dan PNG yang diizinkan.'), false);
+    }
+  },
+  limits: { fileSize: MAX_FILE_SIZE }
+});
+
+// GET /api/dokumentasi - Ambil semua dokumentasi (public)
+app.get('/api/dokumentasi', async (req, res) => {
+  try {
+    const { kategori } = req.query;
+    let query = 'SELECT * FROM dokumentasi WHERE 1=1';
+    const params = [];
+
+    if (kategori && ['Kegiatan', 'Sosial', 'Organisasi', 'Lainnya'].includes(kategori)) {
+      query += ' AND kategori = ?';
+      params.push(kategori);
+    }
+
+    query += ' ORDER BY tanggal DESC, created_at DESC';
+    const [rows] = await pool.query(query, params);
+
+    // Add base URL to foto_url
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const dokumentasiWithFullUrl = rows.map((item) => ({
+      ...item,
+      foto_url: item.foto_url ? `${baseUrl}${item.foto_url}` : null,
+    }));
+
+    res.json(dokumentasiWithFullUrl);
+  } catch (error) {
+    console.error('Failed to load dokumentasi:', error);
+    res.status(500).json({ error: 'Gagal memuat data dokumentasi.' });
+  }
+});
+
+// POST /api/dokumentasi - Tambah dokumentasi (admin only)
+app.post('/api/dokumentasi', dokumentasiUpload.single('foto'), async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { judul, kategori, deskripsi, tanggal } = req.body;
+
+    if (!judul || !kategori || !tanggal) {
+      return res.status(400).json({ error: 'Data tidak lengkap. Judul, kategori, dan tanggal harus diisi.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Foto harus diunggah.' });
+    }
+
+    const validCategories = ['Kegiatan', 'Sosial', 'Organisasi', 'Lainnya'];
+    if (!validCategories.includes(kategori)) {
+      return res.status(400).json({ error: 'Kategori tidak valid.' });
+    }
+
+    const fotoUrl = `/uploads/dokumentasi/${req.file.filename}`;
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    await connection.execute(
+      `INSERT INTO dokumentasi (judul, kategori, foto_url, deskripsi, tanggal, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [judul, kategori, fotoUrl, deskripsi || null, tanggal, now, now]
+    );
+
+    const [newDokumentasi] = await connection.query('SELECT * FROM dokumentasi WHERE id = LAST_INSERT_ID()');
+    connection.release();
+    
+    res.status(201).json(newDokumentasi[0]);
+  } catch (error) {
+    connection.release();
+    console.error('Failed to create dokumentasi:', error);
+    res.status(500).json({ error: 'Gagal menambahkan dokumentasi.' });
+  }
+});
+
+// DELETE /api/dokumentasi/:id - Hapus dokumentasi (admin only)
+app.delete('/api/dokumentasi/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [existing] = await pool.query('SELECT * FROM dokumentasi WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Dokumentasi tidak ditemukan.' });
+    }
+
+    await pool.execute('DELETE FROM dokumentasi WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Dokumentasi berhasil dihapus.' });
+  } catch (error) {
+    console.error('Failed to delete dokumentasi:', error);
+    res.status(500).json({ error: 'Gagal menghapus dokumentasi.' });
+  }
+});
+
 // ─── 404 handler ────────────────────────────────────────────────────
 
 app.use((req, res) => {
