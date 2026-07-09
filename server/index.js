@@ -7,17 +7,106 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from './db.js';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { body, validationResult } from 'express-validator';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
+
+// Security Headers with Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "http://localhost:4000"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Disable for file uploads
+}));
+
+// CORS Configuration
 app.use(cors({
   origin: 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-User-Email', 'X-User-Name'],
   credentials: true
 }));
+
+// Rate Limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: { error: 'Terlalu banyak request. Silakan coba lagi dalam 15 menit.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login attempts per windowMs
+  message: { error: 'Terlalu banyak percobaan login. Silakan coba lagi dalam 15 menit.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiters
+app.use('/api/', generalLimiter);
+app.use('/api/users/by-email', authLimiter);
+app.use('/api/member-registrations', authLimiter);
+
+// Input Sanitization Middleware
+const sanitizeInput = (req, res, next) => {
+  // Sanitize string inputs to prevent XSS
+  const sanitizeString = (str) => {
+    if (typeof str !== 'string') return str;
+    return str
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
+      .replace(/'/g, '&#039;')
+      .trim();
+  };
+
+  // Recursively sanitize object properties
+  const sanitizeObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (typeof obj[key] === 'string') {
+          obj[key] = sanitizeString(obj[key]);
+        } else if (Array.isArray(obj[key])) {
+          obj[key] = obj[key].map(item => 
+            typeof item === 'string' ? sanitizeString(item) : sanitizeObject(item)
+          );
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sanitizeObject(obj[key]);
+        }
+      }
+    }
+    return obj;
+  };
+
+  // Sanitize body
+  if (req.body) {
+    sanitizeObject(req.body);
+  }
+  
+  // Sanitize query parameters
+  if (req.query) {
+    sanitizeObject(req.query);
+  }
+
+  next();
+};
+
 app.use(express.json());
+app.use(sanitizeInput);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
