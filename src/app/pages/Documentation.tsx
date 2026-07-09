@@ -1,47 +1,61 @@
+import { useEffect, useState } from 'react';
 import { PublicNavbar } from '../components/PublicNavbar';
 import { Footer } from '../components/Footer';
-import { Image, Calendar } from 'lucide-react';
+import { Image, Calendar, Filter } from 'lucide-react';
 
-const mockGallery = [
-  {
-    id: '1',
-    title: 'MAKESTA 2025',
-    date: '2025-05-20',
-    category: 'Kegiatan',
-  },
-  {
-    id: '2',
-    title: 'Bakti Sosial Ramadhan',
-    date: '2026-03-25',
-    category: 'Sosial',
-  },
-  {
-    id: '3',
-    title: 'Pelantikan Pengurus 2026',
-    date: '2026-02-03',
-    category: 'Organisasi',
-  },
-  {
-    id: '4',
-    title: 'LAKMUD Regional',
-    date: '2025-11-15',
-    category: 'Kegiatan',
-  },
-  {
-    id: '5',
-    title: 'Pelatihan Public Speaking',
-    date: '2026-04-10',
-    category: 'Pelatihan',
-  },
-  {
-    id: '6',
-    title: 'Kajian Rutin Jumat',
-    date: '2026-04-05',
-    category: 'Keagamaan',
-  },
-];
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+
+interface Dokumentasi {
+  id: number;
+  judul: string;
+  kategori: 'Kegiatan' | 'Sosial' | 'Organisasi' | 'Lainnya';
+  foto_url: string;
+  deskripsi?: string;
+  tanggal: string;
+  created_at: string;
+}
 
 export function Documentation() {
+  const [dokumentasiList, setDokumentasiList] = useState<Dokumentasi[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const fetchDokumentasi = async () => {
+    try {
+      setLoading(true);
+      const url = selectedCategory === 'all' 
+        ? `${API_BASE}/api/dokumentasi`
+        : `${API_BASE}/api/dokumentasi?kategori=${selectedCategory}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Gagal memuat data');
+      const data = await res.json();
+      setDokumentasiList(data);
+    } catch (error) {
+      console.error('Failed to fetch dokumentasi:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDokumentasi();
+  }, [selectedCategory]);
+
+  const categories = ['all', 'Kegiatan', 'Sosial', 'Organisasi', 'Lainnya'];
+
+  const getCategoryColor = (kategori: string) => {
+    switch (kategori) {
+      case 'Kegiatan':
+        return 'bg-blue-100 text-blue-700';
+      case 'Sosial':
+        return 'bg-green-100 text-green-700';
+      case 'Organisasi':
+        return 'bg-purple-100 text-purple-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <PublicNavbar />
@@ -57,30 +71,67 @@ export function Documentation() {
       {/* Content */}
       <section className="py-16 bg-white flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Gallery Grid */}
-          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {mockGallery.map((item) => (
-              <div
-                key={item.id}
-                className="group bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-              >
-                <div className="bg-gradient-to-br from-green-100 to-blue-100 h-48 flex items-center justify-center relative overflow-hidden">
-                  <Image size={48} className="text-green-600 group-hover:scale-110 transition-transform" />
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all" />
-                </div>
-                <div className="p-4">
-                  <div className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded mb-2">
-                    {item.category}
-                  </div>
-                  <h3 className="font-bold text-gray-900 mb-2">{item.title}</h3>
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <Calendar size={12} />
-                    <span>{new Date(item.date).toLocaleDateString('id-ID')}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Filter */}
+          <div className="mb-8 flex items-center gap-4">
+            <Filter size={20} className="text-gray-600" />
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedCategory === category
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {category === 'all' ? 'Semua' : category}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Gallery Grid */}
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">Memuat data dokumentasi...</p>
+            </div>
+          ) : dokumentasiList.length === 0 ? (
+            <div className="bg-gray-50 rounded-lg p-12 text-center">
+              <Image size={48} className="text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Belum ada dokumentasi untuk kategori ini.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {dokumentasiList.map((item) => (
+                <div
+                  key={item.id}
+                  className="group bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <div className="relative h-48 bg-gray-100">
+                    <img
+                      src={item.foto_url}
+                      alt={item.judul}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <div className={`inline-block px-2 py-1 text-xs rounded mb-2 ${getCategoryColor(item.kategori)}`}>
+                      {item.kategori}
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{item.judul}</h3>
+                    {item.deskripsi && (
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{item.deskripsi}</p>
+                    )}
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <Calendar size={12} />
+                      <span>{new Date(item.tanggal).toLocaleDateString('id-ID')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Info */}
           <div className="mt-16 bg-gray-50 rounded-lg p-8 border border-gray-200 text-center">

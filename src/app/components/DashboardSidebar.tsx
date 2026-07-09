@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  Image,
 } from 'lucide-react';
 import { useState } from 'react';
 import { LogoIPNU } from './LogoIPNU';
@@ -35,6 +36,7 @@ export function DashboardSidebar({ role }: DashboardSidebarProps) {
     { path: '/admin/registrations', label: 'Pendaftaran Kegiatan', icon: ClipboardList },
     { path: '/admin/structure', label: 'Struktur Organisasi', icon: Network },
     { path: '/admin/news', label: 'Berita & Artikel', icon: Newspaper },
+    { path: '/admin/dokumentasi', label: 'Dokumentasi', icon: Image },
     { path: '/admin/suggestions', label: 'Saran Masuk', icon: MessageSquare },
   ];
 

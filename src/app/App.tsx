@@ -27,6 +27,7 @@ import { AdminNews } from './pages/admin/AdminNews';
 import { ArticleDetail } from './pages/ArticleDetail';
 import { AdminSuggestions } from './pages/admin/AdminSuggestions';
 import { AdminMemberRegistrations } from './pages/admin/AdminMemberRegistrations';
+import { AdminDokumentasi } from './pages/admin/AdminDokumentasi';
 
 // User Pages
 import { UserDashboard } from './pages/user/UserDashboard';
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="registrations" element={<AdminRegistrations />} />
           <Route path="structure" element={<AdminStructure />} />
           <Route path="news" element={<AdminNews />} />
+          <Route path="dokumentasi" element={<AdminDokumentasi />} />
           <Route path="suggestions" element={<AdminSuggestions />} />
           <Route path="member-registrations" element={<AdminMemberRegistrations />} />
         </Route>

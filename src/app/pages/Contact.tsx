@@ -111,12 +111,18 @@ export function Contact() {
                 </div>
               </div>
 
-              {/* Map Placeholder */}
-              <div className="mt-8 bg-gray-200 rounded-lg h-64 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <MapPin size={48} className="mx-auto mb-2" />
-                  <p>Google Maps</p>
-                  <p className="text-sm">Lokasi Sekretariat</p>
+              {/* Address Card */}
+              <div className="mt-8 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border-2 border-green-200 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MapPin size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 mb-2">Alamat Sekretariat</h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      Jl. Desa Batursari, Kecamatan Talun, Kabupaten Pekalongan, Provinsi Jawa Tengah
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
