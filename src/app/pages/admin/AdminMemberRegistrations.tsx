@@ -161,46 +161,7 @@ export function AdminMemberRegistrations() {
     }
   };
 
-  const handleResetPassword = async (email: string) => {
-    const newPasswordInput = prompt('Masukkan password baru (kosongkan untuk generate otomatis):');
-    if (newPasswordInput === null) return;
-
-    let newPassword: string;
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    if (newPasswordInput.trim() === '') {
-      newPassword = '';
-      for (let i = 0; i < 8; i++) {
-        newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    } else if (newPasswordInput.trim().length < 6) {
-      alert('Password minimal 6 karakter. Menggunakan password otomatis.');
-      newPassword = '';
-      for (let i = 0; i < 8; i++) {
-        newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    } else {
-      newPassword = newPasswordInput.trim();
-    }
-
-    try {
-      const response = await fetch(`${apiBase}/api/created-accounts/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: newPassword }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Gagal mereset password.');
-      }
-
-      setPasswordDialog({ email, password: newPassword, fullName: email });
-      alert(`Password untuk ${email} telah direset! Password baru akan ditampilkan.`);
-    } catch (err: any) {
-      console.error('Error resetting password:', err);
-      alert(`Error: ${err.message}`);
-    }
-  };const handleResetPassword = async (email: string, fullName: string) => {
+  const handleResetPassword = async (email: string, fullName: string) => {
   const newPassword = 'ipnuippnu123';
 
   try {
