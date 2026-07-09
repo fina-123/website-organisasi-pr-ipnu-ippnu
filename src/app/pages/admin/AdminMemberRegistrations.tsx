@@ -100,67 +100,43 @@ export function AdminMemberRegistrations() {
   }, []);
 
   const handleApprove = async (id: string) => {
-    const registration = registrations.find((item) => item.id === id);
-    if (!registration) return;
+  const registration = registrations.find((item) => item.id === id);
+  if (!registration) return;
 
-    const passwordInput = prompt('Masukkan password untuk akun (kosongkan untuk generate otomatis):');
-    if (passwordInput === null) return;
+  const password = 'ipnuippnu123';
+  const role = 'user';
 
-    let password: string;
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    if (passwordInput.trim() === '') {
-      password = '';
-      for (let i = 0; i < 8; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    } else if (passwordInput.trim().length < 6) {
-      alert('Password minimal 6 karakter. Menggunakan password otomatis.');
-      password = '';
-      for (let i = 0; i < 8; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    } else {
-      password = passwordInput.trim();
+  setApprovingId(id);
+
+  try {
+    const response = await fetch(`${apiBase}/api/created-accounts/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ registration_id: id, password, role }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Gagal menyetujui pendaftaran.');
     }
 
-    const roleInput = prompt(
-      'Pilih role untuk akun ini:\n- Ketik "admin" untuk Admin\n- Ketik "user" untuk User biasa\n(Kosongkan untuk default: user)'
-    );
-    if (roleInput === null) return;
-    const role = roleInput.toLowerCase() === 'admin' ? 'admin' : 'user';
+    const result = await response.json();
 
-    setApprovingId(id);
+    setPasswordDialog({
+      email: result.email,
+      password: result.password,
+      fullName: result.full_name,
+    });
 
-    try {
-      const response = await fetch(`${apiBase}/api/created-accounts/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registration_id: id, password, role }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Gagal menyetujui pendaftaran.');
-      }
-
-      const result = await response.json();
-
-      setPasswordDialog({
-        email: result.email,
-        password: result.password,
-        fullName: result.full_name,
-      });
-
-      await fetchRegistrations();
-      await fetchCreatedAccounts();
-    } catch (err: any) {
-      console.error('Error approving registration:', err);
-      alert(`Error: ${err.message}`);
-    } finally {
-      setApprovingId(null);
-    }
-  };
-
+    await fetchRegistrations();
+    await fetchCreatedAccounts();
+  } catch (err: any) {
+    console.error('Error approving registration:', err);
+    alert(`Error: ${err.message}`);
+  } finally {
+    setApprovingId(null);
+  }
+};
   const handleReject = async (id: string) => {
     const reason = prompt('Alasan penolakan:');
     if (!reason) return;
@@ -224,7 +200,27 @@ export function AdminMemberRegistrations() {
       console.error('Error resetting password:', err);
       alert(`Error: ${err.message}`);
     }
-  };
+  };const handleResetPassword = async (email: string, fullName: string) => {
+  const newPassword = 'ipnuippnu123';
+
+  try {
+    const response = await fetch(`${apiBase}/api/created-accounts/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: newPassword }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Gagal mereset password.');
+    }
+
+    setPasswordDialog({ email, password: newPassword, fullName });
+  } catch (err: any) {
+    console.error('Error resetting password:', err);
+    alert(`Error: ${err.message}`);
+  }
+};
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -512,7 +508,7 @@ export function AdminMemberRegistrations() {
                                 Salin Email
                               </button>
                               <button
-                                onClick={() => handleResetPassword(account.email)}
+                               onClick={() => handleResetPassword(account.email, account.full_name)}
                                 className="text-xs px-3 py-2 bg-orange-50 text-orange-700 rounded hover:bg-orange-100 flex items-center gap-1"
                               >
                                 Reset Password
