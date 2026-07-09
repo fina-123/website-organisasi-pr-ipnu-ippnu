@@ -1,22 +1,12 @@
 import { useEffect, useState } from 'react';
 import { DashboardSidebar } from '../../components/DashboardSidebar';
-import { Users, Calendar, ClipboardList, Newspaper, Check, X } from 'lucide-react';
+import { Users, Calendar, ClipboardList, Newspaper, Check, X, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { mockMembers, mockNews } from '../../data/mockData';
 import type { Registration } from '../../data/mockData';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
-interface ActivityStats {
-  total_activities: number;
-  upcoming_count: number;
-  ongoing_count: number;
-  completed_count: number;
-  total_quota: number;
-  total_registered: number;
-}
-
-interface RecentActivity {
+interface Activity {
   id: string;
   title: string;
   type: string;
@@ -35,63 +25,97 @@ interface RegistrationWithDetails extends Registration {
 
 export function AdminDashboard() {
   const [pendingRegistrations, setPendingRegistrations] = useState<RegistrationWithDetails[]>([]);
-  const [activityStats, setActivityStats] = useState<ActivityStats | null>(null);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [totalMembers, setTotalMembers] = useState<number>(0);
   const [totalArticles, setTotalArticles] = useState<number>(0);
+  const [totalActivities, setTotalActivities] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
 
       // Fetch total members from created accounts
+      console.log('🔍 [DASHBOARD] Fetching members from /api/created-accounts');
       const membersRes = await fetch(`${API_BASE}/api/created-accounts`);
+      console.log('🔍 [DASHBOARD] Members response status:', membersRes.status);
       if (membersRes.ok) {
         const membersData = await membersRes.json();
-        setTotalMembers(membersData.length);
+        console.log('🔍 [DASHBOARD] Members data:', membersData);
+        console.log('🔍 [DASHBOARD] Members count:', Array.isArray(membersData) ? membersData.length : 0);
+        setTotalMembers(Array.isArray(membersData) ? membersData.length : 0);
+      } else {
+        console.error('❌ [DASHBOARD] Failed to fetch members:', membersRes.status);
       }
 
       // Fetch total articles
-      const articlesRes = await fetch(`${API_BASE}/api/articles?status=published`);
+      console.log('🔍 [DASHBOARD] Fetching articles from /api/articles');
+      const articlesRes = await fetch(`${API_BASE}/api/articles`);
+      console.log('🔍 [DASHBOARD] Articles response status:', articlesRes.status);
       if (articlesRes.ok) {
         const articlesData = await articlesRes.json();
-        setTotalArticles(articlesData.length);
+        console.log('🔍 [DASHBOARD] Articles data:', articlesData);
+        console.log('🔍 [DASHBOARD] Articles count:', Array.isArray(articlesData) ? articlesData.length : 0);
+        setTotalArticles(Array.isArray(articlesData) ? articlesData.length : 0);
+      } else {
+        console.error('❌ [DASHBOARD] Failed to fetch articles:', articlesRes.status);
       }
 
-      // Fetch activity stats
-      const statsRes = await fetch(`${API_BASE}/api/activities/stats`);
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setActivityStats(statsData.overview);
-        setRecentActivities(statsData.recent || []);
+      // Fetch all activities
+      console.log('🔍 [DASHBOARD] Fetching activities from /api/activities');
+      const activitiesRes = await fetch(`${API_BASE}/api/activities`);
+      console.log('🔍 [DASHBOARD] Activities response status:', activitiesRes.status);
+      if (activitiesRes.ok) {
+        const activitiesData = await activitiesRes.json();
+        console.log('🔍 [DASHBOARD] Activities data:', activitiesData);
+        console.log('🔍 [DASHBOARD] Activities count:', Array.isArray(activitiesData) ? activitiesData.length : 0);
+        setTotalActivities(Array.isArray(activitiesData) ? activitiesData.length : 0);
+        setActivities(Array.isArray(activitiesData) ? activitiesData.slice(0, 5) : []);
+      } else {
+        console.error('❌ [DASHBOARD] Failed to fetch activities:', activitiesRes.status);
       }
 
-      // Fetch pending registrations
-      const regRes = await fetch(`${API_BASE}/api/activities?status=upcoming`);
+      // Fetch pending member registrations
+      console.log('🔍 [DASHBOARD] Fetching member registrations from /api/member-registrations');
+      const regRes = await fetch(`${API_BASE}/api/member-registrations`);
+      console.log('🔍 [DASHBOARD] Member registrations response status:', regRes.status);
       if (regRes.ok) {
-        const activities = await regRes.json();
-        const allRegistrations: RegistrationWithDetails[] = [];
-
-        for (const activity of activities.slice(0, 5)) {
-          const regRes = await fetch(`${API_BASE}/api/activities/${activity.id}/registrations`);
-          if (regRes.ok) {
-            const regs = await regRes.json();
-            allRegistrations.push(...regs.filter((r: Registration) => r.status === 'pending'));
-          }
-        }
-
-        setPendingRegistrations(allRegistrations.slice(0, 10));
+        const registrations = await regRes.json();
+        console.log('🔍 [DASHBOARD] Member registrations data:', registrations);
+        console.log('🔍 [DASHBOARD] Pending registrations count:', Array.isArray(registrations) ? registrations.filter((r: any) => r.status === 'pending').length : 0);
+        
+        // Get pending registrations with activity details
+        const pendingRegs = Array.isArray(registrations) 
+          ? registrations.filter((r: any) => r.status === 'pending').slice(0, 10)
+          : [];
+        setPendingRegistrations(pendingRegs);
+      } else {
+        console.error('❌ [DASHBOARD] Failed to fetch member registrations:', regRes.status);
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
   };
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      console.log('🔄 [DASHBOARD] Auto-refreshing data...');
+      fetchDashboardData();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleApprove = async (registrationId: string, activityId: string) => {
@@ -146,8 +170,8 @@ export function AdminDashboard() {
       color: 'bg-green-100 text-green-600',
     },
     {
-      label: 'Kegiatan Aktif',
-      value: activityStats?.upcoming_count || 0,
+      label: 'Total Kegiatan',
+      value: totalActivities,
       icon: Calendar,
       color: 'bg-blue-100 text-blue-600',
     },
@@ -172,9 +196,19 @@ export function AdminDashboard() {
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Admin</h1>
-            <p className="text-gray-600">Selamat datang di panel administrasi IPNU IPPNU Batursari</p>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Admin</h1>
+              <p className="text-gray-600">Selamat datang di panel administrasi IPNU IPPNU Batursari</p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Memuat...' : 'Refresh'}
+            </button>
           </div>
 
           {/* Stats Grid */}
@@ -206,14 +240,14 @@ export function AdminDashboard() {
                   <div className="text-center py-8 text-gray-500">
                     <p>Memuat data...</p>
                   </div>
-                ) : recentActivities.length === 0 ? (
+                ) : activities.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <Calendar size={48} className="mx-auto mb-2 text-gray-300" />
                     <p>Belum ada kegiatan</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {recentActivities.map((activity) => (
+                    {activities.map((activity) => (
                       <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0">
                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Calendar size={20} className="text-green-600" />
