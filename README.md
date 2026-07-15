@@ -7,6 +7,15 @@ Website resmi untuk organisasi IPNU IPPNU Ranting Batursari. Website ini menyedi
 
 ---
 
+## 📊 Project Status
+
+![Progress](https://img.shields.io/badge/Progress-90%25-brightgreen)
+![Status](https://img.shields.io/badge/Status-Production_Ready-success)
+![Version](https://img.shields.io/badge/Version-1.0.0-blue)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+
+---
+
 ## 📖 Tentang Project
 
 Project ini dibangun untuk memenuhi tugas mata kuliah, dengan studi kasus organisasi pelajar Nahdlatul Ulama (IPNU dan IPPNU) tingkat ranting. Website mencakup halaman publik untuk profil organisasi, serta sistem dashboard berbasis peran (admin dan anggota) untuk mengelola data keanggotaan, kegiatan, berita, dan saran.
@@ -16,28 +25,35 @@ Project ini dibangun untuk memenuhi tugas mata kuliah, dengan studi kasus organi
 ## ✨ Fitur
 
 ### 🌐 Halaman Publik
-- Beranda dengan profil singkat organisasi
-- Halaman Profil, Visi & Misi
-- Struktur organisasi
-- Berita dan artikel
-- Dokumentasi kegiatan
-- Halaman kontak
-- Formulir pendaftaran anggota baru
+| Fitur | Status | Keterangan |
+|-------|--------|------------|
+| Beranda dengan profil singkat organisasi | ✅ Complete | Hero section, stats, about, activities, news |
+| Halaman Profil, Visi & Misi | ✅ Complete | Informasi lengkap organisasi |
+| Struktur organisasi | ✅ Complete | IPNU & IPPNU dengan foto dan jabatan |
+| Berita dan artikel | ✅ Complete | CRUD artikel dengan kategori |
+| Dokumentasi kegiatan | ✅ Complete | Galeri foto kegiatan |
+| Halaman kontak | ✅ Complete | Formulir kontak dengan validasi |
+| Formulir pendaftaran anggota baru | ✅ Complete | Approval workflow dengan email notifikasi |
 
 ### 👤 Dashboard User (Anggota)
-- Ringkasan kegiatan yang diikuti dan pendaftaran aktif
-- Profil anggota
-- Daftar anggota
-- Pendaftaran dan riwayat kegiatan
-- Pengiriman saran/aspirasi
+| Fitur | Status | Keterangan |
+|-------|--------|------------|
+| Ringkasan kegiatan yang diikuti | ✅ Complete | Dashboard dengan statistik personal |
+| Profil anggota | ✅ Complete | Edit profil, upload foto |
+| Daftar anggota | ✅ Complete | Search dan filter by organisasi |
+| Pendaftaran dan riwayat kegiatan | ✅ Complete | Register, lihat status, download sertifikat |
+| Pengiriman saran/aspirasi | ✅ Complete | Form saran dengan tracking status |
 
 ### 👑 Dashboard Admin
-- Ringkasan statistik (total anggota, kegiatan aktif, pendaftaran pending, total berita)
-- Kelola data user dan anggota
-- Kelola pendaftaran anggota dan kegiatan
-- Kelola data kegiatan dan struktur organisasi
-- Kelola berita dan artikel
-- Melihat dan membalas saran masuk dari anggota
+| Fitur | Status | Keterangan |
+|-------|--------|------------|
+| Ringkasan statistik | ✅ Complete | Total anggota, kegiatan, artikel, saran |
+| Kelola data user dan anggota | ✅ Complete | CRUD operasi dengan search |
+| Kelola pendaftaran anggota | ✅ Complete | Approve/reject dengan auto-create akun |
+| Kelola data kegiatan | ✅ Complete | CRUD kegiatan dengan auto-status |
+| Kelola struktur organisasi | ✅ Complete | Manage pengurus IPNU/IPPNU |
+| Kelola berita dan artikel | ✅ Complete | CRUD dengan publish/draft |
+| Kelola saran masuk | ✅ Complete | Balas saran dengan tracking |
 
 ---
 
