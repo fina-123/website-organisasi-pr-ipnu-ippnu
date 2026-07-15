@@ -5,8 +5,8 @@ import { Footer } from '../components/Footer';
 import { Users, Calendar, Newspaper, MessageSquare, Sparkles, Target, Heart } from 'lucide-react';
 import { mockActivities } from '../data/mockData';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { Card, CardContent } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { LogoPair } from '../components/LogoPair';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
