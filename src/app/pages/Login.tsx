@@ -3,31 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { LogoPair } from '../components/LogoPair';
 import { useAuth } from '../context/AuthContext';
-import { supabase, isSupabaseConfigured, checkSupabaseConnection } from '../../lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
-
-async function fetchUserIdFromApi(email: string): Promise<string | null> {
-  try {
-    console.log('🔍 Fetching user ID from /api/users/by-email for:', email);
-    const userRes = await fetch(`${API_BASE}/api/users/by-email?email=${encodeURIComponent(email)}`);
-    console.log('📡 Response status:', userRes.status, userRes.statusText);
-
-    if (userRes.ok) {
-      const userData = await userRes.json();
-      console.log('✅ User data from API:', userData);
-      console.log('🆔 Using database userId:', userData.id);
-      return userData.id;
-    } else {
-      const errorText = await userRes.text();
-      console.error('❌ /api/users/by-email responded with', userRes.status, ':', errorText);
-      return null;
-    }
-  } catch (err) {
-    console.error('❌ Network error fetching /api/users/by-email:', err);
-    return null;
-  }
-}
 
 export function Login() {
   const navigate = useNavigate();
@@ -39,111 +16,31 @@ export function Login() {
     password: '',
   });
 
-  const DEMO_USERS = {
-    'admin@ipnuippnu-batursari.org': { password: 'admin123', role: 'admin' as const },
-    'ahmad.fauzi@example.com': { password: 'user123', role: 'user' as const },
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Cek apakah Supabase benar-benar terhubung (timeout 5 detik)
-    const sb = isSupabaseConfigured ? supabase : null;
-    const supabaseConnected = sb ? await checkSupabaseConnection(5000) : false;
+    try {
+      // Panggil fungsi login dari AuthContext
+      const result = await login(formData.email, formData.password);
 
-    if (supabaseConnected && sb) {
-      try {
-        const { data, error: signInError } = await sb.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
-        });
-
-        if (signInError) throw signInError;
-
-        if (data.user) {
-          const { data: memberData, error: memberError } = await sb
-            .from('members')
-            .select('role, full_name')
-            .eq('auth_id', data.user.id)
-            .single();
-
-          if (memberError) {
-            console.error('Query member error:', memberError);
-            const email = 'admin@ipnuippnu-batursari.org';
-            if (data.user.email === email) {
-              const dbUserId = await fetchUserIdFromApi(data.user.email!);
-              console.log('📝 Final userId to be stored:', dbUserId);
-              login(data.user.email!, 'admin', 'Admin IPNU', dbUserId ?? undefined);
-              navigate('/admin/dashboard');
-              return;
-            }
-            const role = 'user';
-            const dbUserId = await fetchUserIdFromApi(data.user.email!);
-            console.log('📝 Final userId to be stored:', dbUserId);
-            login(data.user.email!, role, data.user.email?.split('@')[0], dbUserId ?? undefined);
-            navigate('/user/dashboard');
-            return;
-          }
-
-          const role = memberData?.role || 'user';
-          
-          // Fetch user ID from created_accounts table
-          let userId = data.user.id;
-          try {
-            console.log('🔍 Fetching user ID from /api/users/by-email for:', formData.email);
-            const userRes = await fetch(`${API_BASE}/api/users/by-email?email=${encodeURIComponent(formData.email)}`);
-            console.log('📡 Response status:', userRes.status, userRes.statusText);
-            
-            if (userRes.ok) {
-              const userData = await userRes.json();
-              console.log('✅ User data from API:', userData);
-              console.log('🆔 Using database userId:', userData.id);
-              userId = userData.id;
-            } else {
-              const errorText = await userRes.text();
-              console.error('❌ Failed to fetch user ID. Status:', userRes.status, 'Response:', errorText);
-            }
-          } catch (err) {
-            console.error('❌ Exception while fetching user ID:', err);
-          }
-          
-          console.log('📝 Final userId to be stored:', userId);
-          login(data.user.email!, role as 'user' | 'admin', memberData?.full_name, userId);
-          navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
-        }
-      } catch (err: any) {
-        setError(err.message || 'Email atau password salah');
+      if (!result.success) {
+        setError(result.message || 'Login gagal. Periksa email dan password Anda.');
         setLoading(false);
         return;
       }
-    } else {
-      // Mode lokal: cek created_users dulu, lalu demo users
-      let createdUsers: Record<string, any> = {};
-      try { createdUsers = JSON.parse(localStorage.getItem('created_users') || '{}'); } catch { createdUsers = {}; }
-      const localUser = createdUsers[formData.email];
-      
-      if (localUser && localUser.password === formData.password) {
-        const role = localUser.role || 'user';
-        const dbUserId = await fetchUserIdFromApi(formData.email);
-        console.log('📝 Final userId to be stored:', dbUserId);
-        login(formData.email, role as 'user' | 'admin', localUser.fullName, dbUserId ?? undefined);
-        navigate(role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
-      } else {
-        const demoUser = DEMO_USERS[formData.email as keyof typeof DEMO_USERS];
-        if (demoUser && demoUser.password === formData.password) {
-          const dbUserId = await fetchUserIdFromApi(formData.email);
-          console.log('📝 Final userId to be stored:', dbUserId);
-          login(formData.email, demoUser.role, formData.email === 'ahmad.fauzi@example.com' ? 'Ahmad Fauzi' : undefined, dbUserId ?? undefined);
-          navigate(demoUser.role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
-        } else {
-          setError('Email atau password salah!');
-        }
-      }
-    }
 
-    setLoading(false);
+      // Login berhasil, redirect berdasarkan role
+      if (result.user) {
+        navigate(result.user.role === 'admin' ? '/admin/dashboard' : '/user/dashboard');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Terjadi kesalahan. Coba lagi nanti.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -222,8 +119,6 @@ export function Login() {
               )}
             </button>
           </form>
-
-
 
           {/* Register Link */}
           <div className="mt-6 text-center">

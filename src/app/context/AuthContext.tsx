@@ -1,138 +1,145 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase, isSupabaseConfigured, checkSupabaseConnection } from '../../lib/supabase';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+// ==========================================
+// TIPE DATA
+// ==========================================
 interface User {
   id: string;
   email: string;
-  role: 'user' | 'admin';
-  name?: string;
+  full_name: string;
+  role: 'admin' | 'user';
+  phone?: string;
+  foto_url?: string;
+  organization?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, role: 'user' | 'admin', name?: string, userId?: string) => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; user?: User }>;
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+// ==========================================
+// CONTEXT
+// ==========================================
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+// ==========================================
+// PROVIDER
+// ==========================================
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // ==========================================
+  // CEK SESSION SAAT APP LOAD
+  // ==========================================
   useEffect(() => {
-    let mounted = true;
-
-    const initAuth = async () => {
+    const checkSession = async () => {
       try {
-        // Cek koneksi Supabase dengan timeout
-        const connOk = await checkSupabaseConnection(4000);
-        if (!mounted) return;
-
-        if (connOk && supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!mounted) return;
-
-          if (session?.user) {
-            const { data: memberData } = await supabase
-              .from('members')
-              .select('role, full_name')
-              .eq('auth_id', session.user.id)
-              .single();
-
-            const role = memberData?.role || 'user';
-            const newUser = { id: session.user.id, email: session.user.email!, role: role as 'user' | 'admin', name: memberData?.full_name };
-            if (mounted) {
-              setUser(newUser);
-              localStorage.setItem('user', JSON.stringify(newUser));
-            }
-            return;
-          }
+        const storedUser = localStorage.getItem('ipnu_user');
+        
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
         }
-
-        // Fallback: cek localStorage
-        if (mounted) {
-          const saved = localStorage.getItem('user');
-          if (saved) {
-            try { 
-              setUser(JSON.parse(saved)); 
-            } catch { /* ignore */ }
-          }
-        }
+      } catch (error) {
+        console.error('Session check error:', error);
+        localStorage.removeItem('ipnu_user');
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
-    initAuth();
-
-    if (isSupabaseConfigured && supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return;
-        if (session?.user) {
-          const { data: memberData } = await supabase!
-            .from('members')
-            .select('role, full_name')
-            .eq('auth_id', session.user.id)
-            .single();
-
-          const role = memberData?.role || 'user';
-          const newUser = { id: session.user.id, email: session.user.email!, role: role as 'user' | 'admin', name: memberData?.full_name };
-          setUser(newUser);
-          localStorage.setItem('user', JSON.stringify(newUser));
-        } else {
-          setUser(null);
-          localStorage.removeItem('user');
-        }
-      });
-
-      return () => {
-        mounted = false;
-        subscription.unsubscribe();
-      };
-    }
-
-    return () => { mounted = false; };
+    checkSession();
   }, []);
 
-  const login = (email: string, role: 'user' | 'admin', name?: string, userId?: string) => {
-    let actualUserId = userId;
-    if (!actualUserId) {
-      console.warn('⚠️ [AuthContext] No userId provided! Falling back to Date.now() timestamp. This will cause database JOIN mismatches.');
-      console.warn('⚠️ [AuthContext] Make sure Login.tsx fetches userId from /api/users/by-email before calling login().');
-      actualUserId = Date.now().toString();
+  // ==========================================
+  // FUNCTION LOGIN - PAKAI MYSQL API
+  // ==========================================
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await fetch('http://localhost:4000/api/users/by-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: data.message || 'Login gagal. Periksa email dan password Anda.',
+        };
+      }
+
+      // Simpan user ke state
+      const userData: User = {
+        id: data.id,
+        email: data.email,
+        full_name: data.full_name,
+        role: data.role,
+        phone: data.phone,
+        foto_url: data.foto_url,
+        organization: data.organization,
+      };
+
+      setUser(userData);
+      localStorage.setItem('ipnu_user', JSON.stringify(userData));
+
+      return {
+        success: true,
+        user: userData,
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: 'Terjadi kesalahan. Coba lagi nanti.',
+      };
     }
-    console.log('🔐 AuthContext.login called with:', { email, role, name, userId });
-    console.log('🆔 Final userId stored:', actualUserId);
-    const newUser: User = { id: actualUserId, email, role, name };
-    setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
-    setLoading(false);
   };
 
-  const logout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase!.auth.signOut();
-    }
+  // ==========================================
+  // FUNCTION LOGOUT
+  // ==========================================
+  const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
-    setLoading(false);
+    localStorage.removeItem('ipnu_user');
+  };
+
+  // ==========================================
+  // VALUE CONTEXT
+  // ==========================================
+  const value: AuthContextType = {
+    user,
+    isLoading,
+    login,
+    logout,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isAdmin: user?.role === 'admin', loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
+// ==========================================
+// HOOK UNTUK AKSES CONTEXT
+// ==========================================
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };

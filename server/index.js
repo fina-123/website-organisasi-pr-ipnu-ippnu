@@ -10,6 +10,8 @@ import pool from './db.js';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { body, validationResult } from 'express-validator';
+import PDFDocument from 'pdfkit';
+import email from './email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -213,7 +215,7 @@ app.patch('/api/member-registrations/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Pendaftaran tidak ditemukan.' });
     }
 
-    // Jika disetujui, otomatis buat akun + data anggota
+    // Jika disetujui, otomatis buat akun + data anggota + kirim email
     if (status === 'approved') {
       // Ambil data pendaftaran
       const [regs] = await connection.execute(
@@ -241,7 +243,31 @@ app.patch('/api/member-registrations/:id/status', async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [accountId, reg.id, reg.full_name, reg.email, passwordHash, reg.phone, reg.organization, 'user']
           );
+
+          // Kirim email notifikasi (tidak menunggu, fire and forget)
+          email.sendEmail({
+            to: reg.email,
+            subject: '✅ Pendaftaran IPNU IPPNU Disetujui!',
+            html: email.getApprovalEmail(reg.full_name, reg.email, defaultPassword)
+          }).catch(err => console.error('Failed to send approval email:', err));
         }
+      }
+    } else if (status === 'rejected') {
+      // Kirim email penolakan
+      const [regs] = await connection.execute(
+        'SELECT * FROM member_registrations WHERE id = ?',
+        [id]
+      );
+
+      if (regs.length > 0) {
+        const reg = regs[0];
+        const reason = req.body.reason || 'Data yang Anda kirimkan belum lengkap. Silakan lengkapi data dan daftar ulang.';
+        
+        email.sendEmail({
+          to: reg.email,
+          subject: 'Pendaftaran IPNU IPPNU Belum Disetujui',
+          html: email.getRejectionEmail(reg.full_name, reason)
+        }).catch(err => console.error('Failed to send rejection email:', err));
       }
     }
 
@@ -345,13 +371,13 @@ app.post('/api/created-accounts/approve', async (req, res) => {
 
     connection.release();
 
+    // Jangan return password di response untuk keamanan
     res.status(201).json({
       id: accountId,
       full_name: reg.full_name,
       email: reg.email,
       phone: reg.phone,
-      password,
-      message: 'Akun berhasil dibuat.',
+      message: 'Akun berhasil dibuat. Password default: ipnuippnu123',
     });
   } catch (error) {
     connection.release();
@@ -1006,7 +1032,7 @@ app.get('/api/my-registrations', async (req, res) => {
   }
 });
 
-// GET /api/certificates/:registrationId - Download sertifikat kegiatan
+// GET /api/certificates/:registrationId - Download sertifikat kegiatan (PDF)
 app.get('/api/certificates/:registrationId', async (req, res) => {
   try {
     const { registrationId } = req.params;
@@ -1034,227 +1060,202 @@ app.get('/api/certificates/:registrationId', async (req, res) => {
 
     const registration = registrations[0];
 
-    // Buat sertifikat dalam format HTML yang bisa di-print
-    const certificateHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Sertifikat - ${registration.title}</title>
-  <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Georgia', serif;
-    }
-    .certificate {
-      width: 100%;
-      height: 297mm;
-      padding: 20mm;
-      box-sizing: border-box;
-      text-align: center;
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-      position: relative;
-    }
-    .border {
-      position: absolute;
-      top: 15mm;
-      left: 15mm;
-      right: 15mm;
-      bottom: 15mm;
-      border: 3px solid #1a5f1a;
-      padding: 15mm;
-    }
-    .inner-border {
-      position: absolute;
-      top: 18mm;
-      left: 18mm;
-      right: 18mm;
-      bottom: 18mm;
-      border: 1px solid #1a5f1a;
-    }
-    .header {
-      margin-top: 20mm;
-      margin-bottom: 10mm;
-    }
-    .logo {
-      font-size: 24pt;
-      font-weight: bold;
-      color: #1a5f1a;
-      margin-bottom: 5mm;
-    }
-    .subtitle {
-      font-size: 14pt;
-      color: #333;
-    }
-    .title {
-      font-size: 32pt;
-      font-weight: bold;
-      color: #1a5f1a;
-      margin: 15mm 0;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-    }
-    .presented-to {
-      font-size: 14pt;
-      color: #555;
-      margin-bottom: 5mm;
-    }
-    .recipient-name {
-      font-size: 28pt;
-      font-weight: bold;
-      color: #000;
-      margin: 5mm 0;
-      border-bottom: 2px solid #1a5f1a;
-      display: inline-block;
-      padding: 0 20mm;
-      min-width: 80mm;
-    }
-    .achievement-text {
-      font-size: 14pt;
-      color: #555;
-      margin: 10mm 0;
-      line-height: 1.6;
-    }
-    .activity-name {
-      font-size: 20pt;
-      font-weight: bold;
-      color: #1a5f1a;
-      margin: 5mm 0;
-    }
-    .activity-date {
-      font-size: 14pt;
-      color: #555;
-      margin-bottom: 20mm;
-    }
-    .footer {
-      position: absolute;
-      bottom: 25mm;
-      left: 20mm;
-      right: 20mm;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-    }
-    .signature {
-      text-align: center;
-    }
-    .signature-line {
-      width: 60mm;
-      border-top: 1px solid #000;
-      margin-bottom: 3mm;
-      padding-top: 3mm;
-    }
-    .signature-name {
-      font-size: 12pt;
-      font-weight: bold;
-      color: #000;
-    }
-    .signature-title {
-      font-size: 10pt;
-      color: #555;
-    }
-    .stamp {
-      width: 40mm;
-      height: 40mm;
-      border: 3px solid #1a5f1a;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10pt;
-      font-weight: bold;
-      color: #1a5f1a;
-      transform: rotate(-15deg);
-      opacity: 0.7;
-    }
-    .certificate-id {
-      position: absolute;
-      bottom: 5mm;
-      left: 20mm;
-      font-size: 9pt;
-      color: #777;
-    }
-  </style>
-</head>
-<body>
-  <div class="certificate">
-    <div class="border"></div>
-    <div class="inner-border"></div>
-    
-    <div class="header">
-      <div class="logo">IPNU IPPNU Ranting Batursari</div>
-      <div class="subtitle">Organisasi Pelajar Islam</div>
-    </div>
+    // Buat PDF document
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: {
+        top: 50,
+        bottom: 50,
+        left: 50,
+        right: 50
+      }
+    });
 
-    <div class="title">Sertifikat Keikutsertaan</div>
+    // Set header untuk download PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="sertifikat-${registration.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf"`);
 
-    <div class="presented-to">Diberikan kepada:</div>
-    <div class="recipient-name">${userName || userEmail}</div>
+    // Pipe PDF ke response
+    doc.pipe(res);
 
-    <div class="achievement-text">
-      Telah berpartisipasi dan menyelesaikan kegiatan dengan baik
-    </div>
+    // Background gradient effect (simulated dengan rectangle)
+    doc.rect(50, 50, 515, 742).fill('#f5f7fa');
 
-    <div class="activity-name">${registration.title}</div>
-    <div class="activity-date">
-      Tanggal: ${new Date(registration.date).toLocaleDateString('id-ID', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
-      })}
-    </div>
+    // Border luar
+    doc.rect(70, 70, 475, 702)
+      .lineWidth(3)
+      .stroke('#1a5f1a');
 
-    <div class="footer">
-      <div class="signature">
-        <div class="signature-line"></div>
-        <div class="signature-name">Ketua Pelaksana</div>
-        <div class="signature-title">IPNU IPPNU Ranting Batursari</div>
-      </div>
-      
-      <div class="stamp">
-        DISETUJUI
-      </div>
+    // Border dalam
+    doc.rect(85, 85, 445, 672)
+      .lineWidth(1)
+      .stroke('#1a5f1a');
 
-      <div class="signature">
-        <div class="signature-line"></div>
-        <div class="signature-name">Pembina</div>
-        <div class="signature-title">IPNU IPPNU Ranting Batursari</div>
-      </div>
-    </div>
+    // Header
+    doc.fontSize(24)
+      .font('Helvetica-Bold')
+      .fillColor('#1a5f1a')
+      .text('IPNU IPPNU Ranting Batursari', {
+        align: 'center',
+        y: 120
+      });
 
-    <div class="certificate-id">
-      ID: ${registrationId}
-    </div>
-  </div>
-</body>
-</html>
-    `;
+    doc.fontSize(14)
+      .font('Helvetica')
+      .fillColor('#333333')
+      .text('Organisasi Pelajar Islam', {
+        align: 'center',
+        y: 150
+      });
 
-    // Set header untuk download sebagai HTML (bisa di-print ke PDF dari browser)
-    res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Content-Disposition', `attachment; filename="sertifikat-${registration.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.html"`);
-    
-    // Tambahkan instruksi untuk konversi ke PDF
-    const certificateWithInstructions = certificateHTML.replace(
-      '</body>',
-      `
-      <div style="position: fixed; bottom: 20px; left: 20px; right: 20px; background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; font-family: Arial, sans-serif; font-size: 12px; color: #856404; z-index: 1000;">
-        <strong>📋 Cara mendapatkan versi PDF:</strong><br>
-        1. Tekan <kbd>Ctrl + P</kbd> (Windows) atau <kbd>Cmd + P</kbd> (Mac)<br>
-        2. Pilih "Simpan sebagai PDF" sebagai printer<br>
-        3. Klik "Simpan" dan pilih lokasi penyimpanan<br>
-        <em>Catatan: Untuk hasil terbaik, gunakan pengaturan kertas A4 dan margin minimal.</em>
-      </div>
-      </body>
-      `
-    );
-    
-    res.send(certificateWithInstructions);
+    // Title
+    doc.fontSize(32)
+      .font('Helvetica-Bold')
+      .fillColor('#1a5f1a')
+      .text('SERTIFIKAT KEIKUTSERTAAN', {
+        align: 'center',
+        y: 200
+      });
+
+    // Presented to
+    doc.fontSize(14)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text('Diberikan kepada:', {
+        align: 'center',
+        y: 250
+      });
+
+    // Recipient name
+    const recipientName = userName || userEmail;
+    doc.fontSize(28)
+      .font('Helvetica-Bold')
+      .fillColor('#000000')
+      .text(recipientName, {
+        align: 'center',
+        y: 280
+      });
+
+    // Underline untuk nama
+    const textWidth = doc.widthOfString(recipientName);
+    const startX = (595 - textWidth) / 2;
+    doc.moveTo(startX, 310)
+      .lineTo(startX + textWidth, 310)
+      .lineWidth(2)
+      .stroke('#1a5f1a');
+
+    // Achievement text
+    doc.fontSize(14)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text('Telah berpartisipasi dan menyelesaikan kegiatan dengan baik', {
+        align: 'center',
+        y: 340
+      });
+
+    // Activity name
+    doc.fontSize(20)
+      .font('Helvetica-Bold')
+      .fillColor('#1a5f1a')
+      .text(registration.title, {
+        align: 'center',
+        y: 380
+      });
+
+    // Activity date
+    const activityDate = new Date(registration.date).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    doc.fontSize(14)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text(`Tanggal: ${activityDate}`, {
+        align: 'center',
+        y: 410
+      });
+
+    // Footer - Signatures
+    const footerY = 650;
+
+    // Left signature
+    doc.fontSize(12)
+      .font('Helvetica-Bold')
+      .fillColor('#000000')
+      .text('Ketua Pelaksana', {
+        align: 'center',
+        x: 150,
+        y: footerY
+      });
+
+    doc.fontSize(10)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text('IPNU IPPNU Ranting Batursari', {
+        align: 'center',
+        x: 150,
+        y: footerY + 20
+      });
+
+    // Signature line left
+    doc.moveTo(100, footerY - 10)
+      .lineTo(200, footerY - 10)
+      .lineWidth(1)
+      .stroke('#000000');
+
+    // Right signature
+    doc.fontSize(12)
+      .font('Helvetica-Bold')
+      .fillColor('#000000')
+      .text('Pembina', {
+        align: 'center',
+        x: 445,
+        y: footerY
+      });
+
+    doc.fontSize(10)
+      .font('Helvetica')
+      .fillColor('#555555')
+      .text('IPNU IPPNU Ranting Batursari', {
+        align: 'center',
+        x: 445,
+        y: footerY + 20
+      });
+
+    // Signature line right
+    doc.moveTo(395, footerY - 10)
+      .lineTo(495, footerY - 10)
+      .lineWidth(1)
+      .stroke('#000000');
+
+    // Stamp (disetujui)
+    doc.circle(297.5, 600, 30)
+      .lineWidth(3)
+      .stroke('#1a5f1a');
+
+    doc.fontSize(10)
+      .font('Helvetica-Bold')
+      .fillColor('#1a5f1a')
+      .text('DISETUJUI', {
+        align: 'center',
+        x: 297.5,
+        y: 605
+      });
+
+    // Certificate ID
+    doc.fontSize(9)
+      .font('Helvetica')
+      .fillColor('#777777')
+      .text(`ID: ${registrationId}`, {
+        align: 'left',
+        x: 85,
+        y: 730
+      });
+
+    // Finalize PDF
+    doc.end();
   } catch (error) {
     console.error('Failed to generate certificate:', error);
     res.status(500).json({ error: 'Gagal membuat sertifikat.' });
@@ -1347,11 +1348,63 @@ app.get('/api/activity-registrations/stats', async (req, res) => {
   }
 });
 
-// GET /api/users/by-email - Get user by email (for login)
+// POST /api/users/by-email - Login dengan email dan password
+app.post('/api/users/by-email', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log('🔐 [SERVER] Login attempt for email:', email);
+
+    if (!email || !password) {
+      console.log('❌ [SERVER] Email or password missing');
+      return res.status(400).json({ error: 'Email dan password diperlukan.' });
+    }
+
+    // Cari user di database
+    const [users] = await pool.query(
+      'SELECT id, email, full_name, role, password_hash, phone, foto_url, organization FROM created_accounts WHERE email = ?',
+      [email]
+    );
+
+    console.log('📊 [SERVER] Database query result:', users.length, 'users found');
+
+    if (users.length === 0) {
+      console.log('❌ [SERVER] User not found in database');
+      return res.status(401).json({ error: 'Email atau password salah.' });
+    }
+
+    const user = users[0];
+
+    // Verify password dengan bcrypt
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    console.log('🔑 [SERVER] Password match:', passwordMatch);
+
+    if (!passwordMatch) {
+      console.log('❌ [SERVER] Invalid password');
+      return res.status(401).json({ error: 'Email atau password salah.' });
+    }
+
+    // Return user data (tanpa password_hash)
+    console.log('✅ [SERVER] Login successful for:', user.email);
+    res.json({
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      phone: user.phone,
+      foto_url: user.foto_url,
+      organization: user.organization,
+    });
+  } catch (error) {
+    console.error('❌ [SERVER] Login error:', error);
+    res.status(500).json({ error: 'Gagal melakukan login.' });
+  }
+});
+
+// GET /api/users/by-email - Get user by email (public, untuk check status)
 app.get('/api/users/by-email', async (req, res) => {
   try {
     const { email } = req.query;
-    console.log('🔍 [SERVER] /api/users/by-email called with email:', email);
+    console.log('🔍 [SERVER] /api/users/by-email GET called with email:', email);
 
     if (!email || typeof email !== 'string') {
       console.log('❌ [SERVER] Email parameter missing or invalid');
